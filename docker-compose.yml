@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: trabalho-final-bd-postgres
+    environment:
+      POSTGRES_DB: f1db
+      POSTGRES_USER: f1user
+      POSTGRES_PASSWORD: f1pass
+    ports:
+      - "5433:5432"
+    working_dir: /work
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - .:/work
+
+volumes:
+  postgres_data:
