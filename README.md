@@ -21,6 +21,7 @@ Esse comando executa os scripts nesta ordem:
 3. `sql/clean_data.sql`
 4. `sql/app_users.sql`
 5. `sql/app_dashboard.sql`
+6. `sql/app_reports.sql`
 
 Para abrir o `psql` no banco:
 

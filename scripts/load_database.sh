@@ -26,4 +26,7 @@ docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" -f sql/app_user
 echo "Executando app_dashboard.sql..."
 docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" -f sql/app_dashboard.sql
 
+echo "Executando app_reports.sql..."
+docker compose exec -T postgres psql -U "$DB_USER" -d "$DB_NAME" -f sql/app_reports.sql
+
 echo "Banco carregado com sucesso."
