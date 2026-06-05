@@ -76,7 +76,7 @@ COMMENT ON TABLE users_log IS 'Auditoria de login e logout dos usuarios';
 CREATE OR REPLACE FUNCTION app_hash_password(p_plain_password TEXT)
 RETURNS TEXT AS $$
 BEGIN
-    RETURN crypt(p_plain_password, gen_salt('bf'));
+    RETURN crypt(p_plain_password, gen_salt('bf')); -- usa bcrypt para gerar o hash da senha: como não é usuario de fato do postgres, não precisa ser configurada com SCRAM-SHA-256
 END;
 $$ LANGUAGE plpgsql;
 
