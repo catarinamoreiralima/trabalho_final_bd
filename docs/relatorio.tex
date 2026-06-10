@@ -25,13 +25,13 @@
 }
 
 \title{
-    \textbf{Projeto Final P4}\\
-    Laboratorio de Bases de Dados\\
-    Base Formula 1, Cidades e Aeroportos
+    \textbf{Projeto Final}\\
+    Laboratório de Bases de Dados - Sigla\\
+    Interface de controle e exploração de base de dados da Fórmula 1
 }
 
 \author{
-    Nome 1 -- NUSP \\
+    Catarina Moreira Lima -- 8957221 \\
     Nome 2 -- NUSP \\
     Nome 3 -- NUSP
 }
@@ -42,35 +42,35 @@
 
 \maketitle
 
-\section{Introducao}
+\section{Introdução}
 
-Este trabalho apresenta o desenvolvimento de um prototipo de aplicacao completa para exploracao da base de dados da Formula 1 integrada a dados geograficos de cidades, paises e aeroportos.
+Este trabalho apresenta o desenvolvimento de um protótipo de aplicação completa para exploração da base de dados da Fórmula 1 integrada a dados geográficos de cidades, países e aeroportos.
 
-A aplicacao permite autenticar usuarios com perfis distintos, apresentar dashboards personalizados, executar relatorios e realizar operacoes de cadastro conforme as permissoes de cada tipo de usuario.
+A aplicação permite autenticar usuários com perfis distintos, apresentar \textit{dashboards} personalizados, executar relatórios e realizar operações de cadastro conforme as permissões de cada tipo de usuário.
 
-\section{Preparacao da Base de Dados}
+\section{Preparação da Base de Dados}
 
-A base utilizada foi preparada a partir dos scripts desenvolvidos ao longo da disciplina. A execucao foi organizada na seguinte ordem:
+A base utilizada foi preparada à partir dos \textit{scripts} desenvolvidos ao longo da disciplina. A execução foi organizada na seguinte ordem:
 
 \begin{enumerate}
     \item \texttt{create\_table.sql}: criacao do esquema relacional;
     \item \texttt{insert\_table.sql}: carga dos arquivos CSV e TSV;
-    \item \texttt{clean\_data.sql}: normalizacao, deduplicacao e ajuste de vinculos;
-    \item \texttt{app\_users.sql}: usuarios, autenticacao, auditoria e triggers;
-    \item \texttt{app\_dashboard.sql}: funcoes de dashboard;
-    \item \texttt{app\_reports.sql}: funcoes de relatorios;
-    \item \texttt{app\_indexes.sql}: indices auxiliares.
+    \item \texttt{clean\_data.sql}: normalização, deduplicação e ajuste de vínculos entre as tabelas;
+    \item \texttt{app\_users.sql}: usuários, autenticação, auditoria e triggers;
+    \item \texttt{app\_dashboard.sql}: funções de dashboard;
+    \item \texttt{app\_reports.sql}: funções de relatórios;
+    \item \texttt{app\_indexes.sql}: índices auxiliares.
 \end{enumerate}
 
-\subsection{Execucao com Docker}
+\subsection{Execução com Docker}
 
-Para facilitar a reproducao do ambiente entre os membros do grupo, foi utilizado Docker com PostgreSQL. O banco e carregado pelo script:
+Para facilitar a reprodução do ambiente entre os membros do grupo, foi utilizado Docker com PostgreSQL. O banco é carregado pelo script:
 
 \begin{lstlisting}[style=sqlstyle]
 ./scripts/load_database.sh
 \end{lstlisting}
 
-Os dados de conexao utilizados foram:
+Os dados de conexão utilizados foram:
 
 \begin{itemize}
     \item Banco: \texttt{f1db}
@@ -78,21 +78,21 @@ Os dados de conexao utilizados foram:
     \item Porta: \texttt{5433}
 \end{itemize}
 
-\section{Modelo de Usuarios e Autenticacao}
+\section{Modelo de Usuários e Autenticação}
 
-A aplicacao possui tres tipos de usuario:
+A aplicação possui três tipos de usuários, cada um com permissões e visões distintas:
 
 \begin{itemize}
-    \item \textbf{Admin}: usuario administrador do sistema;
-    \item \textbf{Escuderia}: usuario associado a uma escuderia;
-    \item \textbf{Piloto}: usuario associado a um piloto.
+    \item \textbf{Admin}: usuário administrador do sistema;
+    \item \textbf{Escuderia}: usuário associado a uma escuderia;
+    \item \textbf{Piloto}: usuário associado a um piloto.
 \end{itemize}
 
-Foi criada a tabela \texttt{users}, contendo os atributos \texttt{userid}, \texttt{login}, \texttt{password}, \texttt{tipo} e \texttt{id\_original}. O atributo \texttt{id\_original} referencia o identificador original de piloto ou escuderia, conforme o tipo de usuario.
+Foi criada a tabela \texttt{users}, contendo os atributos \texttt{userid}, \texttt{login}, \texttt{password}, \texttt{tipo} e \texttt{id\_original}. O atributo \texttt{id\_original} referencia o identificador original de piloto ou escuderia, conforme o tipo de usuário.
 
-\subsection{Protecao das Senhas}
+\subsection{Proteção das Senhas}
 
-A autenticacao foi implementada diretamente pela tabela \texttt{users}. Por isso, as senhas nao sao armazenadas em texto puro. Foi utilizada a extensao \texttt{pgcrypto}, com as funcoes \texttt{crypt()} e \texttt{gen\_salt()}.
+A autenticação foi implementada diretamente pela tabela \texttt{users}. Por isso, as senhas não são armazenadas em texto puro. Foi utilizada a extensão \texttt{pgcrypto}, com as funções \texttt{crypt()} e \texttt{gen\_salt()}.
 
 \begin{lstlisting}[style=sqlstyle]
 CREATE OR REPLACE FUNCTION app_hash_password(p_plain_password TEXT)
@@ -105,21 +105,19 @@ $$ LANGUAGE plpgsql;
 
 \subsection{Auditoria de Acesso}
 
-Foi criada a tabela \texttt{users\_log}, responsavel por registrar eventos de \texttt{LOGIN} e \texttt{LOGOUT}. A funcao \texttt{app\_login} registra automaticamente a entrada do usuario quando a autenticacao e realizada com sucesso.
+Foi criada a tabela \texttt{users\_log}, responsável por registrar eventos de \texttt{LOGIN} e \texttt{LOGOUT}. A função \texttt{app\_login} registra automaticamente a entrada do usuário quando a autenticação é realizada com sucesso.
 
 \section{Triggers Implementadas}
 
-\subsection{Sincronizacao de Pilotos com Usuarios}
+\subsection{Sincronização de Pilotos com Usuarios}
+A trigger associada à tabela \texttt{drivers} cria automaticamente um usuário do tipo \texttt{Piloto} sempre que um novo piloto é cadastrado.
 
-A trigger associada a tabela \texttt{drivers} cria automaticamente um usuario do tipo \texttt{Piloto} sempre que um novo piloto e cadastrado.
+\subsection{Sincronização de Escuderias com Usuarios}
 
-\subsection{Sincronizacao de Escuderias com Usuarios}
+A trigger associada à tabela \texttt{constructors} cria automaticamente um usuário do tipo \texttt{Escuderia} sempre que uma nova escuderia é cadastrada.
+\subsection{Atualização de Data em Usuários}
 
-A trigger associada a tabela \texttt{constructors} cria automaticamente um usuario do tipo \texttt{Escuderia} sempre que uma nova escuderia e cadastrada.
-
-\subsection{Atualizacao de Data em Usuarios}
-
-A trigger de atualizacao da tabela \texttt{users} atualiza automaticamente o campo \texttt{updated\_at} quando uma tupla e modificada.
+A trigger de atualização da tabela \texttt{users} atualiza automaticamente o campo \texttt{updated\_at} quando uma tupla é modificada.
 
 \section{Dashboards}
 
@@ -140,8 +138,8 @@ O dashboard da escuderia apresenta:
 
 \begin{itemize}
     \item quantidade de vitorias da escuderia;
-    \item quantidade de pilotos diferentes que ja correram pela escuderia;
-    \item primeiro e ultimo ano com dados da escuderia.
+    \item quantidade de pilotos diferentes que já correram pela escuderia;
+    \item primeiro e último ano com dados da escuderia.
 \end{itemize}
 
 \subsection{Dashboard do Piloto}
@@ -149,21 +147,21 @@ O dashboard da escuderia apresenta:
 O dashboard do piloto apresenta:
 
 \begin{itemize}
-    \item primeiro e ultimo ano com dados do piloto;
-    \item desempenho por ano e circuito, incluindo pontos, vitorias e corridas disputadas.
+    \item primeiro e último ano com dados do piloto;
+    \item desempenho por ano e circuito, incluindo pontos, vitórias e corridas disputadas.
 \end{itemize}
 
-\section{Relatorios}
+\section{Relatórios}
 
-\subsection{Relatorio 1 -- Admin: Resultados por Status}
+\subsection{Relatório 1 -- Admin: Resultados por Status}
 
-Este relatorio apresenta a quantidade de resultados agrupados por status de corrida.
+Este relatório apresenta a quantidade de resultados agrupados por status de corrida.
 
-\subsection{Relatorio 2 -- Admin: Aeroportos Proximos a Cidade Brasileira}
+\subsection{Relatório 2 -- Admin: Aeroportos Próximos a Cidade Brasileira}
 
-Este relatorio recebe o nome de uma cidade e retorna aeroportos brasileiros dos tipos \texttt{medium\_airport} e \texttt{large\_airport} localizados a ate 100 km da cidade pesquisada.
+Este relatório recebe o nome de uma cidade e retorna aeroportos brasileiros dos tipos \texttt{medium\_airport} e \texttt{large\_airport} localizados a até 100 km da cidade pesquisada.
 
-Para o calculo de distancia foi utilizada a extensao \texttt{earthdistance}, juntamente com \texttt{cube}.
+Para o cálculo de distância foi utilizada a extensão \texttt{earthdistance}, juntamente com \texttt{cube}.
 
 \begin{lstlisting}[style=sqlstyle]
 earth_distance(
@@ -172,57 +170,45 @@ earth_distance(
 ) / 1000.0
 \end{lstlisting}
 
-\subsection{Relatorio 3 -- Admin: Relatorio Hierarquico de Corridas}
+\subsection{Relatório 3 -- Admin: Relatório Hierárquico de Corridas}
 
-O relatorio hierarquico foi organizado em tres niveis:
+O relatório hierárquico foi organizado em três níveis:
 
 \begin{enumerate}
     \item total de corridas cadastradas;
-    \item estatisticas de corridas por circuito;
+    \item estatísticas de corridas por circuito;
     \item detalhes das corridas de cada circuito.
 \end{enumerate}
 
-\subsection{Relatorio 4 -- Escuderia: Vitorias por Piloto}
+\subsection{Relatório 4 -- Escuderia: Vitórias por Piloto}
 
-Este relatorio lista os pilotos que correram por uma escuderia e a quantidade de vezes em que cada piloto obteve primeira posicao.
+Este relatório lista os pilotos que correram por uma escuderia e a quantidade de vezes em que cada piloto obteve primeira posição.
 
-\subsection{Relatorio 5 -- Escuderia: Resultados por Status}
+\subsection{Relatório 5 -- Escuderia: Resultados por Status}
 
-Este relatorio apresenta a quantidade de resultados por status, limitada ao escopo da escuderia logada.
+Este relatório apresenta a quantidade de resultados por status, limitada ao escopo da escuderia logada.
+\subsection{Relatório 6 -- Piloto: Pontos por Ano e Corridas}
 
-\subsection{Relatorio 6 -- Piloto: Pontos por Ano e Corridas}
+Este relatório apresenta os pontos obtidos pelo piloto por ano de participacao, indicando as corridas em que os pontos foram obtidos.
 
-Este relatorio apresenta os pontos obtidos pelo piloto por ano de participacao, indicando as corridas em que os pontos foram obtidos.
+\subsection{Relatório 7 -- Piloto: Status das Corridas}
+Este relatório apresenta a quantidade de resultados por status nas corridas em que o piloto participou.
 
-\subsection{Relatorio 7 -- Piloto: Status das Corridas}
+\section{Índices Criados}
 
-Este relatorio apresenta a quantidade de resultados por status nas corridas em que o piloto participou.
-
-\section{Indices Criados}
-
-Os indices foram criados para auxiliar consultas com filtros, juncoes e ordenacoes frequentes.
+Os índices foram criados para auxiliar consultas com filtros, junções e ordenações frequentes.
 
 \begin{longtable}{|p{5cm}|p{8cm}|}
 \hline
 \textbf{Indice} & \textbf{Justificativa} \\
 \hline
-\texttt{results(driver\_id)} & Auxilia dashboards e relatorios de pilotos. \\
-\hline
-\texttt{results(constructor\_id)} & Auxilia dashboards e relatorios de escuderias. \\
-\hline
-\texttt{results(status\_id)} & Auxilia relatorios de contagem por status. \\
-\hline
-\texttt{races(season\_id)} & Auxilia consultas por temporada. \\
-\hline
-\texttt{races(circuit\_id)} & Auxilia relatorio hierarquico por circuito. \\
-\hline
-\texttt{cities(country\_id, name)} & Auxilia busca de cidades brasileiras por nome. \\
+\texttt{idx\_results\_status} & Facilitar consultas que agrupam ou filtram por status de resultado. \\
 \hline
 \end{longtable}
 
 \section{Interface da Aplicacao}
 
-A interface foi organizada em tres telas principais:
+A interface foi organizada em três telas principais:
 
 \begin{itemize}
     \item tela de login;
@@ -262,27 +248,13 @@ Inserir descricao e captura de tela.
 
 \section{Decisoes de Projeto}
 
-\begin{itemize}
-    \item A autenticacao foi feita pela tabela \texttt{users}, e nao por usuarios reais do PostgreSQL, para simplificar a integracao com a aplicacao.
-    \item As senhas foram armazenadas com hash usando \texttt{pgcrypto}.
-    \item O ambiente de execucao foi containerizado com Docker para facilitar a reproducao.
-    \item Os relatorios e dashboards foram implementados como funcoes armazenadas, mantendo os comandos SQL explicitos.
-\end{itemize}
+
 
 \section{Dificuldades Encontradas}
 
-Descrever aqui as principais dificuldades, por exemplo:
 
-\begin{itemize}
-    \item compatibilizacao entre os nomes dos arquivos CSV e o esquema relacional;
-    \item normalizacao de nacionalidades;
-    \item deduplicacao de cidades;
-    \item calculo de distancia entre coordenadas geograficas;
-    \item organizacao dos diferentes tipos de usuario.
-\end{itemize}
 
-\section{Conclusao}
+\section{Conclusão}
 
-O projeto integrou os conceitos estudados na disciplina por meio da construcao de uma aplicacao apoiada por banco de dados relacional, utilizando carga e limpeza de dados, funcoes, triggers, indices, autenticacao, auditoria, dashboards e relatorios.
 
 \end{document}

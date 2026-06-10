@@ -19,7 +19,7 @@ CREATE EXTENSION IF NOT EXISTS earthdistance;
 /* ------------------------------------------------------------------------------------------------------------
    ADMIN - RELATORIO 1
 
-   Indica a quantidade de resultados por status, apresentando o nome do status
+   Indica a quantidcade de resultados por status, apresentando o nome do status
    e sua respectiva contagem.
 
    Conceitos usados:
@@ -60,7 +60,7 @@ IS 'Relatorio Admin 1: quantidade de resultados por status.';
      que estejam a, no maximo, 100 km da respectiva cidade;
    - considerar apenas aeroportos dos tipos:
      - 'medium_airport'
-     - 'large_airport'
+     - 'large_airport'e
 
    Colunas esperadas no resultado:
    - nome da cidade pesquisada;
