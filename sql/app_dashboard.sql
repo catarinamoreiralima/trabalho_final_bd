@@ -16,7 +16,7 @@
 BEGIN;
 
 /* ------------------------------------------------------------------------------------------------------------
-   1. RESUMO GERAL DO PILOTO
+   1. RESUMO GERAL DO ADMINISTRADORt
 
    Retorna os totais principais pedidos no enunciado:
    - quantidade total de pilotos;
