@@ -6,6 +6,9 @@
    2) insert_table.sql
    3) clean_data.sql
    4) app_users.sql
+   5) app_actions.sql
+   6) app_indexes.sql
+   7) app_views.sql
 ============================================================================================================ */
 
 /* ============================================================================================================
@@ -69,14 +72,14 @@ BEGIN
         c.name AS circuito,
         r.race_date AS data_corrida,
         r.race_time AS horario_corrida,
-        MAX(res.laps)::INTEGER AS voltas_registradas
+        MAX(vrc.laps)::INTEGER AS voltas_registradas
     FROM races r
     JOIN seasons s
       ON s.id = r.season_id
     JOIN circuits c
       ON c.id = r.circuit_id
-    LEFT JOIN results res
-      ON res.race_id = r.id
+    LEFT JOIN vw_resultados_corridas vrc
+      ON vrc.race_id = r.id
     WHERE s.year = (SELECT MAX(year) FROM seasons)
     GROUP BY
         s.year,
@@ -107,19 +110,13 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT
-        s.year AS temporada,
-        c.name AS escuderia,
-        SUM(res.points) AS total_pontos
-    FROM results res
-    JOIN races r
-      ON r.id = res.race_id
-    JOIN seasons s
-      ON s.id = r.season_id
-    JOIN constructors c
-      ON c.id = res.constructor_id
-    WHERE s.year = (SELECT MAX(year) FROM seasons)
-    GROUP BY s.year, c.id, c.name
-    ORDER BY total_pontos DESC, c.name;
+        vrc.ano AS temporada,
+        vrc.escuderia::TEXT AS escuderia,
+        SUM(vrc.points) AS total_pontos
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.ano = (SELECT MAX(year) FROM seasons)
+    GROUP BY vrc.ano, vrc.constructor_id, vrc.escuderia
+    ORDER BY total_pontos DESC, escuderia;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -141,18 +138,12 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT
-        s.year AS temporada,
-        d.given_name || ' ' || d.family_name AS piloto,
-        SUM(res.points) AS total_pontos
-    FROM results res
-    JOIN races r
-      ON r.id = res.race_id
-    JOIN seasons s
-      ON s.id = r.season_id
-    JOIN drivers d
-      ON d.id = res.driver_id
-    WHERE s.year = (SELECT MAX(year) FROM seasons)
-    GROUP BY s.year, d.id, d.given_name, d.family_name
+        vrc.ano AS temporada,
+        (vrc.piloto_nome || ' ' || vrc.piloto_sobrenome)::TEXT AS piloto,
+        SUM(vrc.points) AS total_pontos
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.ano = (SELECT MAX(year) FROM seasons)
+    GROUP BY vrc.ano, vrc.driver_id, vrc.piloto_nome, vrc.piloto_sobrenome
     ORDER BY total_pontos DESC, piloto;
 END;
 $$ LANGUAGE plpgsql;
@@ -189,19 +180,13 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT
-        d.given_name AS piloto_nome,
-        d.family_name AS piloto_sobrenome,
-        MIN(s.year)::INTEGER AS primeiro_ano,
-        MAX(s.year)::INTEGER AS ultimo_ano
-    FROM drivers d
-    JOIN results res
-      ON res.driver_id = d.id
-    JOIN races r
-      ON r.id = res.race_id
-    JOIN seasons s
-      ON s.id = r.season_id
-    WHERE d.id = piloto_id
-    GROUP BY d.id, d.given_name, d.family_name;
+        vrc.piloto_nome,
+        vrc.piloto_sobrenome,
+        MIN(vrc.ano)::INTEGER AS primeiro_ano,
+        MAX(vrc.ano)::INTEGER AS ultimo_ano
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.driver_id = piloto_id
+    GROUP BY vrc.driver_id, vrc.piloto_nome, vrc.piloto_sobrenome;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -223,25 +208,17 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT
-        d.given_name AS piloto_nome,
-        d.family_name AS piloto_sobrenome,
-        s.year AS ano,
-        c.name AS circuito,
-        SUM(res.points)::NUMERIC(10,2) AS pontos,
-        COUNT(CASE WHEN res.position_order = 1 THEN 1 END)::INTEGER AS vitorias,
+        vrc.piloto_nome,
+        vrc.piloto_sobrenome,
+        vrc.ano,
+        vrc.circuito::TEXT AS circuito,
+        SUM(vrc.points)::NUMERIC(10,2) AS pontos,
+        COUNT(CASE WHEN vrc.position_order = 1 THEN 1 END)::INTEGER AS vitorias,
         COUNT(*)::INTEGER AS corridas_disputadas
-    FROM drivers d
-    JOIN results res
-      ON res.driver_id = d.id
-    JOIN races r
-      ON r.id = res.race_id
-    JOIN seasons s
-      ON s.id = r.season_id
-    JOIN circuits c
-      ON c.id = r.circuit_id
-    WHERE d.id = piloto_id
-    GROUP BY d.id, d.given_name, d.family_name, s.year, c.id, c.name
-    ORDER BY s.year;
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.driver_id = piloto_id
+    GROUP BY vrc.driver_id, vrc.piloto_nome, vrc.piloto_sobrenome, vrc.ano, vrc.circuit_id, vrc.circuito
+    ORDER BY vrc.ano;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -266,18 +243,12 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT
-        c.name AS escuderia_nome,
-        MIN(s.year)::INTEGER AS primeiro_ano,
-        MAX(s.year)::INTEGER AS ultimo_ano
-    FROM constructors c
-    JOIN results res
-      ON res.constructor_id = c.id
-    JOIN races r
-      ON r.id = res.race_id
-    JOIN seasons s
-      ON s.id = r.season_id
-    WHERE c.id = escuderia_id
-    GROUP BY c.id, c.name;
+        vrc.escuderia AS escuderia_nome,
+        MIN(vrc.ano)::INTEGER AS primeiro_ano,
+        MAX(vrc.ano)::INTEGER AS ultimo_ano
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.constructor_id = escuderia_id
+    GROUP BY vrc.constructor_id, vrc.escuderia;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -293,10 +264,10 @@ BEGIN
     RETURN QUERY
     SELECT
         c.name AS escuderia_nome,
-        COUNT(DISTINCT res.driver_id)::INTEGER AS quantidade_pilotos
+        COUNT(DISTINCT vrc.driver_id)::INTEGER AS quantidade_pilotos
     FROM constructors c
-    LEFT JOIN results res
-      ON res.constructor_id = c.id
+    LEFT JOIN vw_resultados_corridas vrc
+      ON vrc.constructor_id = c.id
     WHERE c.id = escuderia_id
     GROUP BY c.id, c.name;
 END;
@@ -315,10 +286,10 @@ BEGIN
     RETURN QUERY
     SELECT
         c.name AS escuderia_nome,
-        COUNT(CASE WHEN res.position_order = 1 THEN 1 END)::INTEGER AS quantidade_vitorias
+        COUNT(CASE WHEN vrc.position_order = 1 THEN 1 END)::INTEGER AS quantidade_vitorias
     FROM constructors c
-    LEFT JOIN results res
-      ON res.constructor_id = c.id
+    LEFT JOIN vw_resultados_corridas vrc
+      ON vrc.constructor_id = c.id
     WHERE c.id = escuderia_id
     GROUP BY c.id, c.name;
 END;

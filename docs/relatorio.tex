@@ -2,7 +2,7 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[brazil]{babel}
+\usepackage[brazilian]{babel}
 \usepackage{geometry}
 \usepackage{graphicx}
 \usepackage{float}
@@ -50,33 +50,50 @@ A aplicação permite autenticar usuários com perfis distintos, apresentar \tex
 
 \section{Preparação da Base de Dados}
 
-A base utilizada foi preparada à partir dos \textit{scripts} desenvolvidos ao longo da disciplina. A execução foi organizada na seguinte ordem:
+A base utilizada foi preparada a partir dos \textit{scripts} desenvolvidos ao longo da disciplina. A execução foi organizada na seguinte ordem:
 
 \begin{enumerate}
-    \item \texttt{create\_table.sql}: criacao do esquema relacional;
+    \item \texttt{create\_table.sql}: criação do esquema relacional;
     \item \texttt{insert\_table.sql}: carga dos arquivos CSV e TSV;
     \item \texttt{clean\_data.sql}: normalização, deduplicação e ajuste de vínculos entre as tabelas;
     \item \texttt{app\_users.sql}: usuários, autenticação, auditoria e triggers;
-    \item \texttt{app\_dashboard.sql}: funções de dashboard;
-    \item \texttt{app\_reports.sql}: funções de relatórios;
-    \item \texttt{app\_indexes.sql}: índices auxiliares.
+    \item \texttt{app\_actions.sql}: ações de cadastro e consulta por perfil;
+    \item \texttt{app\_indexes.sql}: índices auxiliares;
+    \item \texttt{app\_views.sql}: views reutilizáveis pela aplicação;
+    \item \texttt{app\_dashboard.sql}: funções de \textit{dashboard};
+    \item \texttt{app\_reports.sql}: funções de relatórios.
 \end{enumerate}
 
 \subsection{Execução com Docker}
 
-Para facilitar a reprodução do ambiente entre os membros do grupo, foi utilizado Docker com PostgreSQL. O banco é carregado pelo script:
+Para facilitar a reprodução do ambiente entre os membros do grupo, foi utilizado Docker com PostgreSQL. A carga foi separada em dois scripts: um para a base de dados e outro para a camada da aplicação.
 
 \begin{lstlisting}[style=sqlstyle]
 ./scripts/load_database.sh
+./scripts/load_app.sh
 \end{lstlisting}
+
+O script \texttt{load\_database.sh} executa a criação do esquema, a carga dos dados e a limpeza. O script \texttt{load\_app.sh} executa os arquivos de usuários, ações, índices, views, dashboards e relatórios. Assim, durante o desenvolvimento de novas funções, é possível recarregar apenas a camada da aplicação.
 
 Os dados de conexão utilizados foram:
 
 \begin{itemize}
     \item Banco: \texttt{f1db}
-    \item Usuario: \texttt{f1user}
+    \item Usuário: \texttt{f1user}
     \item Porta: \texttt{5433}
 \end{itemize}
+
+\section{Views Reutilizáveis}
+
+Foi criado o arquivo \texttt{app\_views.sql} para concentrar consultas reutilizáveis pela aplicação. A view \texttt{vw\_resultados\_corridas} reúne os dados de resultados de corrida com temporada, piloto, escuderia, status e circuito.
+
+Essa view centraliza junções frequentes entre as tabelas \texttt{results}, \texttt{races}, \texttt{seasons}, \texttt{drivers}, \texttt{constructors}, \texttt{status} e \texttt{circuits}. Com isso, as funções de \textit{dashboard} e de relatórios ficam mais simples e reutilizam a mesma base lógica. Os filtros específicos continuam sendo aplicados nas funções, de acordo com o perfil do usuário logado, como administrador, escuderia ou piloto.
+
+Também foi criada a view \texttt{vw\_aeroportos\_cidades\_paises}, que reúne aeroportos, cidades, países e tipos de aeroporto. Essa view é utilizada no relatório de aeroportos próximos a uma cidade brasileira, mantendo na função apenas o filtro pela cidade informada e o cálculo da distância geográfica.
+
+A view \texttt{vw\_corridas\_resumo} resume cada corrida com ano, rodada, circuito, voltas registradas e quantidade de pilotos participantes. Ela é usada no relatório hierárquico de corridas do administrador, evitando repetir a agregação dentro da função de relatório.
+
+A view \texttt{vw\_escuderia\_pilotos} reúne escuderias, pilotos, países e a origem do vínculo entre escuderia e piloto. Essa view é construída sobre a tabela \texttt{app\_escuderia\_pilotos}, que combina vínculos históricos inferidos de \texttt{results} com vínculos criados pela importação de pilotos por arquivo.
 
 \section{Modelo de Usuários e Autenticação}
 
@@ -92,7 +109,7 @@ Foi criada a tabela \texttt{users}, contendo os atributos \texttt{userid}, \text
 
 \subsection{Proteção das Senhas}
 
-A autenticação foi implementada diretamente pela tabela \texttt{users}. Por isso, as senhas não são armazenadas em texto puro. Foi utilizada a extensão \texttt{pgcrypto}, com as funções \texttt{crypt()} e \texttt{gen\_salt()}.
+A autenticação foi implementada diretamente pela tabela \texttt{users}. Por isso, as senhas não são armazenadas em texto puro. Foi utilizada a extensão \texttt{pgcrypto}, com as funções \texttt{crypt()} e \texttt{gen\_salt()}. A função \texttt{app\_alterar\_senha} permite trocar a senha validando a senha atual do usuário.
 
 \begin{lstlisting}[style=sqlstyle]
 CREATE OR REPLACE FUNCTION app_hash_password(p_plain_password TEXT)
@@ -109,15 +126,35 @@ Foi criada a tabela \texttt{users\_log}, responsável por registrar eventos de \
 
 \section{Triggers Implementadas}
 
-\subsection{Sincronização de Pilotos com Usuarios}
-A trigger associada à tabela \texttt{drivers} cria automaticamente um usuário do tipo \texttt{Piloto} sempre que um novo piloto é cadastrado.
+\subsection{Sincronização de Pilotos com Usuários}
+A trigger associada à tabela \texttt{drivers} cria automaticamente um usuário do tipo \texttt{Piloto} sempre que um novo piloto é cadastrado. Em atualizações, a trigger ajusta o login quando necessário, mas preserva a senha já alterada pelo usuário.
 
-\subsection{Sincronização de Escuderias com Usuarios}
+\subsection{Sincronização de Escuderias com Usuários}
 
-A trigger associada à tabela \texttt{constructors} cria automaticamente um usuário do tipo \texttt{Escuderia} sempre que uma nova escuderia é cadastrada.
+A trigger associada à tabela \texttt{constructors} cria automaticamente um usuário do tipo \texttt{Escuderia} sempre que uma nova escuderia é cadastrada. Em atualizações, a trigger ajusta o login quando necessário, mas preserva a senha já alterada pelo usuário.
 \subsection{Atualização de Data em Usuários}
 
 A trigger de atualização da tabela \texttt{users} atualiza automaticamente o campo \texttt{updated\_at} quando uma tupla é modificada.
+
+\subsection{Sincronização de Vínculos entre Escuderias e Pilotos}
+
+A trigger associada à tabela \texttt{results} mantém a tabela \texttt{app\_escuderia\_pilotos} atualizada quando novos resultados criam vínculos entre pilotos e escuderias. Essa estrutura aceita que um mesmo piloto esteja vinculado a mais de uma escuderia, preservando mudanças de escuderia e histórico de carreira.
+
+\section{Ações Implementadas}
+
+Foram criadas funções auxiliares para representar ações solicitadas na especificação:
+
+\begin{itemize}
+    \item \texttt{app\_admin\_cadastrar\_escuderia}: cadastra uma nova escuderia e deixa a criação do usuário correspondente a cargo da trigger;
+    \item \texttt{app\_admin\_cadastrar\_piloto}: cadastra um novo piloto e deixa a criação do usuário correspondente a cargo da trigger;
+    \item \texttt{app\_escuderia\_processar\_importacao\_pilotos}: processa linhas carregadas por arquivo em uma tabela de apoio, cadastrando pilotos novos e criando vínculos com a escuderia;
+    \item \texttt{app\_escuderia\_listar\_pilotos}: lista os pilotos vinculados à escuderia no cadastro da aplicação;
+    \item \texttt{app\_escuderia\_consultar\_piloto\_por\_sobrenome}: consulta pilotos pelo sobrenome, limitando os resultados aos pilotos vinculados à escuderia logada.
+\end{itemize}
+
+Para suportar a importação de pilotos por escuderia, foi criada uma tabela própria de vínculo entre escuderias e pilotos. A relação original entre piloto e escuderia aparece apenas em \texttt{results}; portanto, pilotos recém-importados ainda não teriam vínculo visível caso a aplicação dependesse somente dos resultados históricos. Por isso, a tabela é inicialmente populada com pares distintos de \texttt{results}, recebe vínculos criados por importação de arquivo e é atualizada por trigger quando novos resultados são registrados.
+
+Após a revisão das funções, foi mantida a separação entre consultas de desempenho e consultas cadastrais. Dashboards e relatórios que calculam pontos, vitórias, temporadas, corridas ou status usam \texttt{results} ou \texttt{vw\_resultados\_corridas}, pois dependem de participação real em corridas. Já as consultas cadastrais de pilotos vinculados à escuderia usam \texttt{app\_escuderia\_pilotos} ou \texttt{vw\_escuderia\_pilotos}, permitindo incluir pilotos importados por arquivo mesmo antes de existirem resultados para eles.
 
 \section{Dashboards}
 
@@ -137,7 +174,7 @@ O dashboard do administrador apresenta:
 O dashboard da escuderia apresenta:
 
 \begin{itemize}
-    \item quantidade de vitorias da escuderia;
+    \item quantidade de vitórias da escuderia;
     \item quantidade de pilotos diferentes que já correram pela escuderia;
     \item primeiro e último ano com dados da escuderia.
 \end{itemize}
@@ -172,13 +209,22 @@ earth_distance(
 
 \subsection{Relatório 3 -- Admin: Relatório Hierárquico de Corridas}
 
-O relatório hierárquico foi organizado em três níveis:
+O relatório 3 foi dividido em duas partes:
+
+\begin{itemize}
+    \item {\small\texttt{app\_admin\_relatorio\_3\_escuderias\_pilotos}}: lista todas as escuderias cadastradas e a quantidade de pilotos que correram por cada uma;
+    \item {\small\texttt{app\_admin\_relatorio\_3\_hierarquico\_corridas}}: organiza as corridas em formato hierárquico.
+\end{itemize}
+
+A parte hierárquica foi organizada em três níveis:
 
 \begin{enumerate}
     \item total de corridas cadastradas;
     \item estatísticas de corridas por circuito;
     \item detalhes das corridas de cada circuito.
 \end{enumerate}
+
+Para representar o relatório multinível em formato tabular, a função retorna uma coluna \texttt{nivel}. Assim, as linhas de nível 1 representam o total geral, as linhas de nível 2 representam o resumo por circuito e as linhas de nível 3 representam as corridas pertencentes a cada circuito.
 
 \subsection{Relatório 4 -- Escuderia: Vitórias por Piloto}
 
@@ -189,7 +235,7 @@ Este relatório lista os pilotos que correram por uma escuderia e a quantidade d
 Este relatório apresenta a quantidade de resultados por status, limitada ao escopo da escuderia logada.
 \subsection{Relatório 6 -- Piloto: Pontos por Ano e Corridas}
 
-Este relatório apresenta os pontos obtidos pelo piloto por ano de participacao, indicando as corridas em que os pontos foram obtidos.
+Este relatório apresenta os pontos obtidos pelo piloto por ano de participação, indicando as corridas em que os pontos foram obtidos.
 
 \subsection{Relatório 7 -- Piloto: Status das Corridas}
 Este relatório apresenta a quantidade de resultados por status nas corridas em que o piloto participou.
@@ -200,35 +246,49 @@ Os índices foram criados para auxiliar consultas com filtros, junções e orden
 
 \begin{longtable}{|p{5cm}|p{8cm}|}
 \hline
-\textbf{Indice} & \textbf{Justificativa} \\
+\textbf{Índice} & \textbf{Justificativa} \\
 \hline
 \texttt{idx\_results\_status} & Facilitar consultas que agrupam ou filtram por status de resultado. \\
 \hline
+\begin{tabular}[t]{@{}l@{}}\texttt{idx\_results\_}\\\texttt{constructor\_driver}\end{tabular} & Auxiliar consultas que agrupam resultados por escuderia e contam pilotos distintos, especialmente no Relatório Admin 3 e nos relatórios de escuderia. \\
+\hline
+\begin{tabular}[t]{@{}l@{}}\texttt{idx\_cities\_country\_}\\\texttt{lower\_name\_coordinates}\end{tabular} & Auxiliar a busca de cidades brasileiras por nome no Relatório 2, considerando apenas cidades com coordenadas disponíveis. \\
+\hline
+\begin{tabular}[t]{@{}l@{}}\texttt{idx\_airports\_city\_}\\\texttt{type\_coordinates}\end{tabular} & Auxiliar a seleção de aeroportos com cidade, tipo e coordenadas disponíveis no Relatório 2. \\
+\hline
+\begin{tabular}[t]{@{}l@{}}\texttt{idx\_results\_driver\_}\\\texttt{race\_points\_positive}\end{tabular} & Auxiliar o Relatório 6, filtrando resultados pontuados por piloto e facilitando a junção com corridas. \\
+\hline
+\begin{tabular}[t]{@{}l@{}}\texttt{idx\_app\_escuderia\_}\\\texttt{pilotos\_piloto}\end{tabular} & Auxiliar consultas que partem de um piloto para encontrar vínculos com escuderias na camada da aplicação. \\
+\hline
+\begin{tabular}[t]{@{}l@{}}\texttt{idx\_app\_import\_pilotos\_}\\\texttt{escuderia\_pendentes}\end{tabular} & Auxiliar o processamento de linhas pendentes carregadas por arquivo para uma escuderia. \\
+\hline
+\begin{tabular}[t]{@{}l@{}}\texttt{idx\_drivers\_}\\\texttt{lower\_family\_name}\end{tabular} & Auxiliar buscas de pilotos por sobrenome sem diferenciar letras maiúsculas e minúsculas. \\
+\hline
 \end{longtable}
 
-\section{Interface da Aplicacao}
+\section{Interface da Aplicação}
 
 A interface foi organizada em três telas principais:
 
 \begin{itemize}
     \item tela de login;
-    \item tela de dashboard;
-    \item tela de relatorios.
+    \item tela de \textit{dashboard};
+    \item tela de relatórios.
 \end{itemize}
 
 \subsection{Tela de Login}
 
-Inserir descricao e captura de tela.
+Inserir descrição e captura de tela.
 
 \begin{figure}[H]
     \centering
     % \includegraphics[width=0.85\textwidth]{screenshots/login.png}
-    \caption{Tela de login da aplicacao.}
+    \caption{Tela de login da aplicação.}
 \end{figure}
 
 \subsection{Tela de Dashboard}
 
-Inserir descricao e captura de tela.
+Inserir descrição e captura de tela.
 
 \begin{figure}[H]
     \centering
@@ -236,17 +296,17 @@ Inserir descricao e captura de tela.
     \caption{Tela de dashboard.}
 \end{figure}
 
-\subsection{Tela de Relatorios}
+\subsection{Tela de Relatórios}
 
-Inserir descricao e captura de tela.
+Inserir descrição e captura de tela.
 
 \begin{figure}[H]
     \centering
     % \includegraphics[width=0.85\textwidth]{screenshots/relatorios.png}
-    \caption{Tela de relatorios.}
+    \caption{Tela de relatórios.}
 \end{figure}
 
-\section{Decisoes de Projeto}
+\section{Decisões de Projeto}
 
 
 

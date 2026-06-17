@@ -6,9 +6,10 @@
    2) insert_table.sql
    3) clean_data.sql
    4) app_users.sql
-   5) app_dashboard.sql
-
-   Este arquivo comeca apenas com o Relatorio 1 do Admin.
+   5) app_actions.sql
+   6) app_indexes.sql
+   7) app_views.sql
+   8) app_dashboard.sql
 ============================================================================================================ */
 
 BEGIN;
@@ -19,7 +20,7 @@ CREATE EXTENSION IF NOT EXISTS earthdistance;
 /* ------------------------------------------------------------------------------------------------------------
    ADMIN - RELATORIO 1
 
-   Indica a quantidcade de resultados por status, apresentando o nome do status
+   Indica a quantidade de resultados por status, apresentando o nome do status
    e sua respectiva contagem.
 
    Conceitos usados:
@@ -35,12 +36,10 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT
-        st.status::TEXT AS status_corrida,
+        vrc.status_corrida::TEXT AS status_corrida,
         COUNT(*)::INTEGER AS quantidade_resultados
-    FROM results res
-    JOIN status st
-      ON st.id = res.status_id
-    GROUP BY st.id, st.status
+    FROM vw_resultados_corridas vrc
+    GROUP BY vrc.status_id, vrc.status_corrida
     ORDER BY quantidade_resultados DESC, status_corrida;
 END;
 $$ LANGUAGE plpgsql;
@@ -87,37 +86,31 @@ BEGIN
     RETURN QUERY
     SELECT
         c.name::TEXT AS nome_cidade,
-        a.iata_code::TEXT AS codigo_iata,
-        a.name::TEXT AS nome_aeroporto,
-        city_airport.name::TEXT AS cidade_aeroporto,
+        vap.codigo_iata::TEXT AS codigo_iata,
+        vap.nome_aeroporto::TEXT AS nome_aeroporto,
+        vap.cidade_aeroporto::TEXT AS cidade_aeroporto,
         (
             earth_distance(
                 ll_to_earth(c.latitude, c.longitude),
-                ll_to_earth(a.latitude_deg, a.longitude_deg)
+                ll_to_earth(vap.latitude_aeroporto, vap.longitude_aeroporto)
             ) / 1000.0
         )::DOUBLE PRECISION AS distancia_km,
-        at.type::TEXT AS tipo_aeroporto
+        vap.tipo_aeroporto::TEXT AS tipo_aeroporto
     FROM cities c
     JOIN countries country_city
       ON country_city.id = c.country_id
-    JOIN airports a
-      ON a.latitude_deg IS NOT NULL
-     AND a.longitude_deg IS NOT NULL
-    JOIN airport_types at
-      ON at.id = a.airport_type_id
-    JOIN cities city_airport
-      ON city_airport.id = a.city_id
-    JOIN countries country_airport
-      ON country_airport.id = city_airport.country_id
+    JOIN vw_aeroportos_cidades_paises vap
+      ON vap.latitude_aeroporto IS NOT NULL
+     AND vap.longitude_aeroporto IS NOT NULL
     WHERE lower(c.name) = lower(p_city_name)
       AND country_city.code = 'BR'
-      AND country_airport.code = 'BR'
-      AND at.type IN ('medium_airport', 'large_airport')
+      AND vap.codigo_pais_aeroporto = 'BR'
+      AND vap.tipo_aeroporto IN ('medium_airport', 'large_airport')
       AND c.latitude IS NOT NULL
       AND c.longitude IS NOT NULL
       AND earth_distance(
             ll_to_earth(c.latitude, c.longitude),
-            ll_to_earth(a.latitude_deg, a.longitude_deg)
+            ll_to_earth(vap.latitude_aeroporto, vap.longitude_aeroporto)
           ) <= 100000
     ORDER BY distancia_km, nome_aeroporto;
 END;
@@ -153,6 +146,145 @@ IS 'Relatorio Admin 2: aeroportos brasileiros medium/large a ate 100 km de uma c
      - quantidade de pilotos participantes.
 ------------------------------------------------------------------------------------------------------------ */
 
+DROP FUNCTION IF EXISTS app_admin_relatorio_3_escuderias_pilotos();
+
+CREATE OR REPLACE FUNCTION app_admin_relatorio_3_escuderias_pilotos()
+RETURNS TABLE (
+    escuderia_nome TEXT,
+    quantidade_pilotos INTEGER
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        c.name::TEXT AS escuderia_nome,
+        COUNT(DISTINCT vrc.driver_id)::INTEGER AS quantidade_pilotos
+    FROM constructors c
+    LEFT JOIN vw_resultados_corridas vrc
+      ON vrc.constructor_id = c.id
+    GROUP BY c.id, c.name
+    ORDER BY quantidade_pilotos DESC, escuderia_nome;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION app_admin_relatorio_3_escuderias_pilotos()
+IS 'Relatorio Admin 3 Parte A: todas as escuderias e a quantidade de pilotos que correram por cada uma.';
+
+
+DROP FUNCTION IF EXISTS app_admin_relatorio_3_hierarquico_corridas();
+
+CREATE OR REPLACE FUNCTION app_admin_relatorio_3_hierarquico_corridas()
+RETURNS TABLE (
+    nivel INTEGER,
+    descricao_nivel TEXT,
+    circuito TEXT,
+    ano INTEGER,
+    rodada INTEGER,
+    corrida TEXT,
+    quantidade_corridas INTEGER,
+    minimo_voltas INTEGER,
+    media_voltas NUMERIC(10,2),
+    maximo_voltas INTEGER,
+    voltas_registradas INTEGER,
+    quantidade_pilotos INTEGER
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH corridas_base AS (
+        SELECT
+            vcr.race_id,
+            vcr.ano,
+            vcr.rodada,
+            vcr.corrida,
+            vcr.circuito_id,
+            vcr.circuito,
+            vcr.voltas_registradas,
+            vcr.quantidade_pilotos
+        FROM vw_corridas_resumo vcr
+    ),
+    linhas_hierarquicas AS (
+        SELECT
+            1 AS nivel,
+            'Total geral de corridas'::TEXT AS descricao_nivel,
+            NULL::TEXT AS circuito,
+            NULL::INTEGER AS ano,
+            NULL::INTEGER AS rodada,
+            NULL::TEXT AS corrida,
+            COUNT(*)::INTEGER AS quantidade_corridas,
+            NULL::INTEGER AS minimo_voltas,
+            NULL::NUMERIC(10,2) AS media_voltas,
+            NULL::INTEGER AS maximo_voltas,
+            NULL::INTEGER AS voltas_registradas,
+            NULL::INTEGER AS quantidade_pilotos,
+            0 AS ordem_circuito_id,
+            0 AS ordem_ano,
+            0 AS ordem_rodada
+        FROM corridas_base
+
+        UNION ALL
+
+        SELECT
+            2 AS nivel,
+            'Resumo por circuito'::TEXT AS descricao_nivel,
+            cb.circuito::TEXT AS circuito,
+            NULL::INTEGER AS ano,
+            NULL::INTEGER AS rodada,
+            NULL::TEXT AS corrida,
+            COUNT(*)::INTEGER AS quantidade_corridas,
+            MIN(cb.voltas_registradas)::INTEGER AS minimo_voltas,
+            AVG(cb.voltas_registradas)::NUMERIC(10,2) AS media_voltas,
+            MAX(cb.voltas_registradas)::INTEGER AS maximo_voltas,
+            NULL::INTEGER AS voltas_registradas,
+            NULL::INTEGER AS quantidade_pilotos,
+            cb.circuito_id AS ordem_circuito_id,
+            0 AS ordem_ano,
+            0 AS ordem_rodada
+        FROM corridas_base cb
+        GROUP BY cb.circuito_id, cb.circuito
+
+        UNION ALL
+
+        SELECT
+            3 AS nivel,
+            'Corrida do circuito'::TEXT AS descricao_nivel,
+            cb.circuito::TEXT AS circuito,
+            cb.ano::INTEGER AS ano,
+            cb.rodada::INTEGER AS rodada,
+            cb.corrida::TEXT AS corrida,
+            NULL::INTEGER AS quantidade_corridas,
+            NULL::INTEGER AS minimo_voltas,
+            NULL::NUMERIC(10,2) AS media_voltas,
+            NULL::INTEGER AS maximo_voltas,
+            cb.voltas_registradas::INTEGER AS voltas_registradas,
+            cb.quantidade_pilotos::INTEGER AS quantidade_pilotos,
+            cb.circuito_id AS ordem_circuito_id,
+            cb.ano AS ordem_ano,
+            cb.rodada AS ordem_rodada
+        FROM corridas_base cb
+    )
+    SELECT
+        lh.nivel,
+        lh.descricao_nivel,
+        lh.circuito,
+        lh.ano,
+        lh.rodada,
+        lh.corrida,
+        lh.quantidade_corridas,
+        lh.minimo_voltas,
+        lh.media_voltas,
+        lh.maximo_voltas,
+        lh.voltas_registradas,
+        lh.quantidade_pilotos
+    FROM linhas_hierarquicas lh
+    ORDER BY
+        lh.ordem_circuito_id,
+        lh.nivel,
+        lh.ordem_ano,
+        lh.ordem_rodada;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION app_admin_relatorio_3_hierarquico_corridas()
+IS 'Relatorio Admin 3 Parte B: relatorio hierarquico em tres niveis com total de corridas, resumo por circuito e detalhes por corrida.';
 
 
 
@@ -186,16 +318,14 @@ BEGIN
     RETURN QUERY
     SELECT
         c.name::TEXT AS escuderia_nome,
-        (d.given_name || ' ' || d.family_name)::TEXT AS nome_piloto,
-        COUNT(CASE WHEN res.position_order = 1 THEN 1 END)::INTEGER AS quantidade_vitorias
+        (vrc.piloto_nome || ' ' || vrc.piloto_sobrenome)::TEXT AS nome_piloto,
+        COUNT(CASE WHEN vrc.position_order = 1 THEN 1 END)::INTEGER AS quantidade_vitorias
     FROM constructors c
-    LEFT JOIN results res
-      ON res.constructor_id = c.id
-    LEFT JOIN drivers d
-      ON d.id = res.driver_id
+    LEFT JOIN vw_resultados_corridas vrc
+      ON vrc.constructor_id = c.id
     WHERE c.id = escuderia_id
-      AND d.id IS NOT NULL
-    GROUP BY c.id, c.name, d.id, d.given_name, d.family_name;
+      AND vrc.driver_id IS NOT NULL
+    GROUP BY c.id, c.name, vrc.driver_id, vrc.piloto_nome, vrc.piloto_sobrenome;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -232,15 +362,13 @@ BEGIN
     RETURN QUERY
     SELECT
         c.name::TEXT AS escuderia_nome,
-        st.status::TEXT AS status_corrida,
+        vrc.status_corrida::TEXT AS status_corrida,
         COUNT(*)::INTEGER AS quantidade_corridas
     FROM constructors c
-    LEFT JOIN results res
-      ON res.constructor_id = c.id
-    LEFT JOIN status st
-      ON st.id = res.status_id
+    LEFT JOIN vw_resultados_corridas vrc
+      ON vrc.constructor_id = c.id
     WHERE c.id = escuderia_id
-    GROUP BY c.name, st.status;
+    GROUP BY c.name, vrc.status_corrida;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -263,6 +391,34 @@ IS 'Relatorio Escuderia 5: quantidade de resultados por status.';
    - devem ser criados os indices necessarios para auxiliar essa consulta.
 ------------------------------------------------------------------------------------------------------------ */
 
+DROP FUNCTION IF EXISTS app_piloto_relatorio_6(INTEGER);
+
+CREATE OR REPLACE FUNCTION app_piloto_relatorio_6(piloto_id INTEGER)
+RETURNS TABLE (
+    ano_participacao INTEGER,
+    quantidade_total_pontos INTEGER,
+    corridas_pontuadas TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        vrc.ano::INTEGER AS ano_participacao,
+        SUM(vrc.points)::INTEGER AS quantidade_total_pontos,
+        STRING_AGG(vrc.corrida, ', ' ORDER BY vrc.rodada)::TEXT AS corridas_pontuadas
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.driver_id = piloto_id
+      AND vrc.points > 0
+    GROUP BY vrc.ano;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION app_piloto_relatorio_6(piloto_id INTEGER)
+IS 'Relatorio Piloto 6: quantidade total de pontos por ano de participacao.';
+
+
+
+
+
 /* ------------------------------------------------------------------------------------------------------------
    PILOTO - RELATORIO 7
 
@@ -274,5 +430,28 @@ IS 'Relatorio Escuderia 5: quantidade de resultados por status.';
    - apresentar o status e a contagem de cada um;
    - limitar os resultados ao escopo do piloto logado.
 ------------------------------------------------------------------------------------------------------------ */
+
+DROP FUNCTION IF EXISTS app_piloto_relatorio_7(INTEGER);
+
+CREATE OR REPLACE FUNCTION app_piloto_relatorio_7(piloto_id INTEGER)
+RETURNS TABLE (
+    status_corrida TEXT,
+    quantidade_corridas INTEGER
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        vrc.status_corrida::TEXT AS status_corrida,
+        COUNT(*)::INTEGER AS quantidade_corridas
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.driver_id = piloto_id
+    GROUP BY vrc.status_corrida;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION app_piloto_relatorio_7(piloto_id INTEGER)
+IS 'Relatorio Piloto 7: quantidade de resultados por status.';
+
+
 
 COMMIT;

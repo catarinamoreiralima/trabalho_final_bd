@@ -87,6 +87,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION app_alterar_senha(
+    p_userid INTEGER,
+    p_senha_atual TEXT,
+    p_nova_senha TEXT
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    UPDATE users u
+    SET password = app_hash_password(p_nova_senha)
+    WHERE u.userid = p_userid
+      AND app_check_password(p_senha_atual, u.password);
+
+    RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION app_alterar_senha(INTEGER, TEXT, TEXT)
+IS 'Permite alterar a senha de um usuario validando a senha atual.';
+
 CREATE OR REPLACE FUNCTION trg_users_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -158,9 +177,8 @@ BEGIN
     INSERT INTO users (login, password, tipo, id_original) -- insere ou atualiza o usuario correspondente a escuderia
     VALUES (v_login, app_hash_password(NEW.constructor_ref), 'Escuderia', NEW.id)
     ON CONFLICT (tipo, id_original) WHERE id_original IS NOT NULL
-    DO UPDATE -- se ja existir um usuario para essa escuderia, atualiza o login e a senha (isso permite manter o mesmo usuario atualizado se o constructor_ref mudar)
-    SET login = EXCLUDED.login,
-        password = EXCLUDED.password;
+    DO UPDATE -- se ja existir um usuario para essa escuderia, atualiza o login sem sobrescrever a senha alterada pelo usuario
+    SET login = EXCLUDED.login;
 
     RETURN NEW;
 END;
@@ -198,8 +216,7 @@ BEGIN
     VALUES (v_login, app_hash_password(NEW.driver_ref), 'Piloto', NEW.id)
     ON CONFLICT (tipo, id_original) WHERE id_original IS NOT NULL
     DO UPDATE
-    SET login = EXCLUDED.login,
-        password = EXCLUDED.password;
+    SET login = EXCLUDED.login;
 
     RETURN NEW;
 END;
