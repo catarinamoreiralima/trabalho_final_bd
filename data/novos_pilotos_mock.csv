@@ -1,0 +1,4 @@
+escuderia_id,driver_ref,given_name,family_name,date_of_birth,country_id
+113,mock_ana_silva,Ana,Silva,2001-04-10,30
+113,mock_bruno_souza,Bruno,Souza,1999-09-22,30
+113,mock_clara_oliveira,Clara,Oliveira,2002-12-05,30

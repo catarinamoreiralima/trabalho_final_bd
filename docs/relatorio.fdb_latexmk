@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1781721839.22587 "/Users/catarinamoreiralima/Documents/Faculdade/Trabalho Final BD/docs/relatorio.tex" "relatorio.pdf" "relatorio" 1781721839.65102 0
-  "/Users/catarinamoreiralima/Documents/Faculdade/Trabalho Final BD/docs/relatorio.tex" 1781721838.54647 15703 18896e64926a1bd216fa1a1c0bacba95 ""
+["pdflatex"] 1781722553.82208 "/Users/catarinamoreiralima/Documents/Faculdade/Trabalho Final BD/docs/relatorio.tex" "relatorio.pdf" "relatorio" 1781722554.27362 0
+  "/Users/catarinamoreiralima/Documents/Faculdade/Trabalho Final BD/docs/relatorio.tex" 1781722553.14294 16470 308ba1ae5e8e8ee7ff84bc840998ed06 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1136849721 2971 def0b6c1f0b107b3b936def894055589 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1136849721 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -95,9 +95,9 @@
   "/usr/local/texlive/2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1780693037 5573038 b99aad5e4898a9034e953632f940512b ""
   "/usr/local/texlive/2026/texmf-var/web2c/pdftex/pdflatex.fmt" 1780692957 3636769 3d3808c897c20f23af98242b1f03062c ""
   "/usr/local/texlive/2026/texmf.cnf" 1774209515 577 648cd9f92f9c0eac486f4c71c85cfbbe ""
-  "relatorio.aux" 1781721839.59683 5150 5175d4a3d1e2b2fcc05f79a642d88b8e "pdflatex"
-  "relatorio.out" 1781721839.59754 6711 dff8dc8cf2c8c46dd4f72bcb9be8e366 "pdflatex"
-  "relatorio.tex" 1781721838.54647 15703 18896e64926a1bd216fa1a1c0bacba95 ""
+  "relatorio.aux" 1781722554.21949 5433 857a3fe5e80b8e317c14396b3a4cc0a5 "pdflatex"
+  "relatorio.out" 1781722554.22022 7184 f6fa0f2c7504fcd4e0b2399dd3a9061b "pdflatex"
+  "relatorio.tex" 1781722553.14294 16470 308ba1ae5e8e8ee7ff84bc840998ed06 ""
   (generated)
   "relatorio.aux"
   "relatorio.log"

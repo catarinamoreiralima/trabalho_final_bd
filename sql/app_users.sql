@@ -192,7 +192,46 @@ FOR EACH ROW
 EXECUTE FUNCTION trg_sync_constructor_user();
 
 /* ------------------------------------------------------------------------------------------------------------
-   6. TRIGGERS PARA SINCRONIZAR DRIVERS -> USERS - MESMA LOGICA DOS CONSTRUCTORS
+   6. TRIGGER PARA REMOVER USUARIO QUANDO UMA ESCUDERIA FOR REMOVIDA
+
+   Quando uma escuderia e deletada de constructors, remove tambem o usuario do tipo Escuderia associado.
+   Os registros de users_log sao removidos antes para respeitar a chave estrangeira com users.
+------------------------------------------------------------------------------------------------------------ */
+CREATE OR REPLACE FUNCTION trg_delete_constructor_user()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_userid INTEGER;
+BEGIN
+    SELECT u.userid
+    INTO v_userid
+    FROM users u
+    WHERE u.tipo = 'Escuderia'
+      AND u.id_original = OLD.id;
+
+    IF v_userid IS NOT NULL THEN
+        DELETE FROM users_log ul
+        WHERE ul.userid = v_userid;
+
+        DELETE FROM users u
+        WHERE u.userid = v_userid;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_delete_constructor_user ON constructors;
+
+CREATE TRIGGER trg_delete_constructor_user
+AFTER DELETE ON constructors
+FOR EACH ROW
+EXECUTE FUNCTION trg_delete_constructor_user();
+
+COMMENT ON FUNCTION trg_delete_constructor_user()
+IS 'Remove automaticamente o usuario associado quando uma escuderia e removida de constructors.';
+
+/* ------------------------------------------------------------------------------------------------------------
+   7. TRIGGERS PARA SINCRONIZAR DRIVERS -> USERS - MESMA LOGICA DOS CONSTRUCTORS
 ------------------------------------------------------------------------------------------------------------ */
 CREATE OR REPLACE FUNCTION trg_sync_driver_user()
 RETURNS TRIGGER AS $$
@@ -230,7 +269,46 @@ FOR EACH ROW
 EXECUTE FUNCTION trg_sync_driver_user();
 
 /* ------------------------------------------------------------------------------------------------------------
-   7. FUNCOES PARA LOGIN E LOGOUT DA APLICACAO
+   8. TRIGGER PARA REMOVER USUARIO QUANDO UM PILOTO FOR REMOVIDO
+
+   Quando um piloto e deletado de drivers, remove tambem o usuario do tipo Piloto associado.
+   Os registros de users_log sao removidos antes para respeitar a chave estrangeira com users.
+------------------------------------------------------------------------------------------------------------ */
+CREATE OR REPLACE FUNCTION trg_delete_driver_user()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_userid INTEGER;
+BEGIN
+    SELECT u.userid
+    INTO v_userid
+    FROM users u
+    WHERE u.tipo = 'Piloto'
+      AND u.id_original = OLD.id;
+
+    IF v_userid IS NOT NULL THEN
+        DELETE FROM users_log ul
+        WHERE ul.userid = v_userid;
+
+        DELETE FROM users u
+        WHERE u.userid = v_userid;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_delete_driver_user ON drivers;
+
+CREATE TRIGGER trg_delete_driver_user
+AFTER DELETE ON drivers
+FOR EACH ROW
+EXECUTE FUNCTION trg_delete_driver_user();
+
+COMMENT ON FUNCTION trg_delete_driver_user()
+IS 'Remove automaticamente o usuario associado quando um piloto e removido de drivers.';
+
+/* ------------------------------------------------------------------------------------------------------------
+   9. FUNCOES PARA LOGIN E LOGOUT DA APLICACAO
 
    A aplicacao pode chamar app_login(login, senha). Se autenticar, a funcao registra LOGIN
    em users_log e retorna os dados do usuario.

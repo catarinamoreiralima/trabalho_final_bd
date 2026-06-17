@@ -129,9 +129,18 @@ Foi criada a tabela \texttt{users\_log}, responsável por registrar eventos de \
 \subsection{Sincronização de Pilotos com Usuários}
 A trigger associada à tabela \texttt{drivers} cria automaticamente um usuário do tipo \texttt{Piloto} sempre que um novo piloto é cadastrado. Em atualizações, a trigger ajusta o login quando necessário, mas preserva a senha já alterada pelo usuário.
 
+\subsection{Remoção de Usuários de Pilotos}
+
+Também foi criada uma trigger associada à tabela \texttt{drivers} para remover automaticamente o usuário do tipo \texttt{Piloto} quando o piloto correspondente é removido. Antes da remoção do usuário, os registros relacionados em \texttt{users\_log} são apagados para respeitar a chave estrangeira existente entre \texttt{users\_log} e \texttt{users}.
+
 \subsection{Sincronização de Escuderias com Usuários}
 
 A trigger associada à tabela \texttt{constructors} cria automaticamente um usuário do tipo \texttt{Escuderia} sempre que uma nova escuderia é cadastrada. Em atualizações, a trigger ajusta o login quando necessário, mas preserva a senha já alterada pelo usuário.
+
+\subsection{Remoção de Usuários de Escuderias}
+
+Foi criada uma trigger associada à tabela \texttt{constructors} para remover automaticamente o usuário do tipo \texttt{Escuderia} quando a escuderia correspondente é removida. Assim como no caso dos pilotos, os registros associados em \texttt{users\_log} são removidos antes da exclusão do usuário.
+
 \subsection{Atualização de Data em Usuários}
 
 A trigger de atualização da tabela \texttt{users} atualiza automaticamente o campo \texttt{updated\_at} quando uma tupla é modificada.
