@@ -93,6 +93,10 @@ IS 'Mantem app_escuderia_pilotos sincronizada quando results recebe ou altera vi
 
    A aplicacao pode carregar um CSV para esta tabela usando \copy no psql. Depois disso, a funcao
    app_escuderia_processar_importacao_pilotos processa as linhas pendentes da escuderia.
+
+   Antes de inserir, a funcao verifica se ja existe outro piloto com o mesmo given_name e
+   family_name (conforme exigido na especificacao). Se existir, a linha e rejeitada com uma
+   mensagem explicativa e nenhum piloto/vinculo e criado para ela.
 ------------------------------------------------------------------------------------------------------------ */
 CREATE TABLE IF NOT EXISTS app_import_pilotos_escuderia (
     import_id     SERIAL PRIMARY KEY,
@@ -232,7 +236,8 @@ IS 'Acao Admin: cadastra um piloto e permite que a trigger crie o usuario corres
    FROM 'data/novos_pilotos.csv'
    WITH (FORMAT csv, HEADER true);
 
-   Se o driver_ref ja existir, a funcao apenas cria o vinculo entre piloto e escuderia.
+   Se ja existir outro piloto com o mesmo nome e sobrenome, a linha e rejeitada (ver comentario
+   acima da tabela de staging).
 ------------------------------------------------------------------------------------------------------------ */
 DROP FUNCTION IF EXISTS app_escuderia_processar_importacao_pilotos(INTEGER);
 
@@ -279,30 +284,42 @@ BEGIN
             CONTINUE;
         END IF;
 
+        -- Verificacao exigida pela especificacao: nao pode existir outro piloto com o mesmo
+        -- nome e sobrenome. Se existir, a linha e rejeitada e nao cria piloto nem vinculo.
         SELECT d.id
         INTO v_piloto_id
         FROM drivers d
-        WHERE d.driver_ref = v_linha.driver_ref;
+        WHERE lower(d.given_name) = lower(v_linha.given_name)
+          AND lower(d.family_name) = lower(v_linha.family_name);
 
-        IF v_piloto_id IS NULL THEN
-            INSERT INTO drivers (
-                driver_ref,
-                given_name,
-                family_name,
-                date_of_birth,
-                country_id
-            )
-            VALUES (
-                v_linha.driver_ref,
-                v_linha.given_name,
-                v_linha.family_name,
-                v_linha.date_of_birth,
-                v_linha.country_id
-            )
-            RETURNING id INTO v_piloto_id;
+        IF v_piloto_id IS NOT NULL THEN
+            v_linhas_invalidas := v_linhas_invalidas + 1;
 
-            v_pilotos_inseridos := v_pilotos_inseridos + 1;
+            UPDATE app_import_pilotos_escuderia
+            SET mensagem = format('Piloto ja cadastrado com esse nome (id %s)', v_piloto_id),
+                processed_at = CURRENT_TIMESTAMP
+            WHERE import_id = v_linha.import_id;
+
+            CONTINUE;
         END IF;
+
+        INSERT INTO drivers (
+            driver_ref,
+            given_name,
+            family_name,
+            date_of_birth,
+            country_id
+        )
+        VALUES (
+            v_linha.driver_ref,
+            v_linha.given_name,
+            v_linha.family_name,
+            v_linha.date_of_birth,
+            v_linha.country_id
+        )
+        RETURNING id INTO v_piloto_id;
+
+        v_pilotos_inseridos := v_pilotos_inseridos + 1;
 
         INSERT INTO app_escuderia_pilotos (
             escuderia_id,

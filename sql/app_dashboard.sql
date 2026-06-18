@@ -226,6 +226,33 @@ COMMENT ON FUNCTION app_piloto_resumo(piloto_id INTEGER)
 IS 'Dashboard piloto: resumo de desempenho do piloto por ano e circuito.';
 
 /* ------------------------------------------------------------------------------------------------------------
+   2.1 ESCUDERIA ATUAL DO PILOTO
+
+   A Tela 2 do piloto precisa destacar "o nome da escuderia associada". Como um piloto pode ter
+   corrido por mais de uma escuderia ao longo da carreira, usamos a escuderia da corrida mais
+   recente (maior ano e, dentro do ano, maior rodada) em vw_resultados_corridas.
+------------------------------------------------------------------------------------------------------------ */
+DROP FUNCTION IF EXISTS app_piloto_escuderia_atual(INTEGER);
+
+CREATE OR REPLACE FUNCTION app_piloto_escuderia_atual(piloto_id INTEGER)
+RETURNS TABLE (
+    escuderia_nome TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        vrc.escuderia::TEXT AS escuderia_nome
+    FROM vw_resultados_corridas vrc
+    WHERE vrc.driver_id = piloto_id
+    ORDER BY vrc.ano DESC, vrc.rodada DESC
+    LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION app_piloto_escuderia_atual(piloto_id INTEGER)
+IS 'Dashboard piloto: escuderia da corrida mais recente do piloto, exibida na Tela 2.';
+
+/* ------------------------------------------------------------------------------------------------------------
    3. RESUMO GERAL DA ESCUDERIA
 
    Retorna os totais principais pedidos no enunciado:

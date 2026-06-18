@@ -25,6 +25,8 @@ Depois que a base já estiver carregada, use apenas o script da aplicação para
 ./scripts/load_app.sh
 ```
 
+Com a base e a camada da aplicação carregadas, suba a interface em Streamlit (veja [Como Rodar a Aplicação](#como-rodar-a-aplicação)).
+
 Para abrir o `psql` no banco:
 
 ```bash
@@ -49,6 +51,28 @@ Usuário: f1user
 Senha: f1pass
 ```
 
+## Como Rodar a Aplicação
+
+A interface da aplicação (telas de login, dashboard e relatórios) é construída em Streamlit e roda localmente, fora do Docker, conectando no PostgreSQL que já está rodando no container (porta `5433`).
+
+Pré-requisito: já ter executado `./scripts/load_database.sh` e `./scripts/load_app.sh` pelo menos uma vez.
+
+```bash
+python -m venv .venv
+
+# Linux/macOS
+source .venv/bin/activate
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+
+pip install -r app/requirements.txt
+streamlit run app/main.py
+```
+
+A aplicação abre em `http://localhost:8501`. Use qualquer um dos [usuários padrão](#usuários-padrão) para entrar (ex: `admin`/`admin`).
+
+Configuração de conexão (opcional): copie `.env.example` para `.env` na raiz do projeto se quiser sobrescrever host/porta/usuário/senha/banco. Sem esse arquivo, a aplicação usa os mesmos valores padrão do `docker-compose.yml`.
+
 ## Ordem de Execução
 
 O script `scripts/load_database.sh` carrega apenas a base de dados:
@@ -72,11 +96,13 @@ Essa separação evita recarregar todos os dados sempre que uma função, relat�
 
 ```text
 .
+├── app/                   Aplicação Streamlit (telas de login, dashboard e relatórios)
 ├── data/                  Arquivos CSV e TSV usados na carga do banco
 ├── docs/                  Relatório do projeto em LaTeX e PDF gerado
 ├── scripts/               Scripts auxiliares para carregar e acessar o banco
 ├── sql/                   Scripts SQL de criação, carga, limpeza e aplicação
 ├── docker-compose.yml     Configuração do PostgreSQL em Docker
+├── .env.example           Modelo de configuração de conexão para a aplicação
 ├── .gitignore             Arquivos e pastas ignorados pelo Git
 └── README.md              Documentação principal do projeto
 ```
@@ -155,7 +181,7 @@ Conteúdo principal:
 - cria a tabela `app_import_pilotos_escuderia`, usada como staging para arquivos CSV de pilotos;
 - `app_admin_cadastrar_escuderia`: cadastra uma nova escuderia em `constructors`;
 - `app_admin_cadastrar_piloto`: cadastra um novo piloto em `drivers`;
-- `app_escuderia_processar_importacao_pilotos`: processa pilotos carregados por arquivo e cria o vínculo com a escuderia;
+- `app_escuderia_processar_importacao_pilotos`: processa pilotos carregados por arquivo e cria o vínculo com a escuderia; rejeita (sem inserir) linhas cujo nome e sobrenome já existam em outro piloto cadastrado, registrando o motivo na própria linha de importação;
 - `app_escuderia_listar_pilotos`: lista os pilotos vinculados à escuderia no cadastro da aplicação;
 - `app_escuderia_consultar_piloto_por_sobrenome`: busca pilotos pelo sobrenome dentro do escopo da escuderia logada.
 
@@ -210,6 +236,7 @@ Conteúdo principal:
 - dashboard do piloto:
   - `app_piloto_anos`;
   - `app_piloto_resumo`;
+  - `app_piloto_escuderia_atual`: escuderia da corrida mais recente do piloto, usada na Tela 2;
 - dashboard da escuderia:
   - `app_escuderia_anos`;
   - `app_escuderia_quantidade_pilotos`;
@@ -235,6 +262,38 @@ Conteúdo principal:
 - Relatório 7, piloto: `app_piloto_relatorio_7`.
 
 O relatório de aeroportos usa `vw_aeroportos_cidades_paises` e calcula a distância entre a cidade pesquisada e os aeroportos com `earth_distance`.
+
+## Aplicação (Streamlit)
+
+A pasta `app/` contém o protótipo de aplicação exigido no P4: três telas (login, dashboard e relatórios), com variações por tipo de usuário (Admin, Escuderia, Piloto). Toda consulta ao banco é feita chamando, de forma explícita, as views/funções já criadas em `sql/app_*.sql` — não há lógica de negócio duplicada em Python.
+
+### `app/main.py`
+
+Ponto de entrada (`streamlit run app/main.py`). Implementa a Tela 1 (login, via `app_login`) e o roteador que alterna entre a Tela 2 e a Tela 3 usando `st.session_state["screen"]`.
+
+### `app/db.py`
+
+Conexão única cacheada com o PostgreSQL (`autocommit=True`) e helpers genéricos (`run_query`, `run_function`, `run_command`, `run_command_many`) que sempre executam SQL explícito (nunca um ORM). Também expõe `get_countries()` para preencher os `selectbox` de país nos formulários de cadastro.
+
+### `app/auth.py`
+
+Login/logout chamando `app_login`/`app_logout` (`sql/app_users.sql`) e helpers de sessão (`current_user`, `is_logged_in`).
+
+### `app/labels.py`
+
+Tradução dos aliases retornados pelas funções SQL para rótulos em português, usada em todas as tabelas exibidas (dashboard e relatórios).
+
+### `app/dashboard.py`
+
+Tela 2. Mostra as informações de dashboard de cada tipo de usuário (`app_admin_dashboard_resumo`, `app_escuderia_quantidade_pilotos`, `app_piloto_resumo`, etc.), com gráficos nativos do Streamlit (`st.bar_chart`/`st.line_chart`), e expõe as ações de cada tipo dentro de expanders.
+
+### `app/actions.py`
+
+Formulários de ação: cadastro de escuderia/piloto (Admin), consulta de piloto por sobrenome e importação de pilotos por arquivo CSV via upload (Escuderia). Captura erros do banco (ex: `RAISE EXCEPTION` das triggers de sincronização de usuário) e exibe a mensagem ao usuário.
+
+### `app/reports.py`
+
+Tela 3. Lista somente os relatórios do tipo de usuário logado, executa a função correspondente e mostra o resultado; o Relatório 3 (hierárquico) usa drill-down por circuito sem nova consulta ao banco.
 
 ## Scripts
 
