@@ -1,21 +1,59 @@
 """
-Tela 2 - Dashboard.
+Telas de Visao Geral (dashboard) e de Acoes/Cadastros.
 
-Mostra as informacoes resumidas do tipo de usuario logado e, na mesma tela, as acoes
-disponiveis para esse tipo (cadastro, consulta, importacao) dentro de expanders. O enunciado
-pede "botoes ou links para as acoes disponiveis ao tipo de usuario autenticado" na Tela 2, sem
-exigir uma 4a tela dedicada para isso.
+- render_dashboard: informacoes resumidas do tipo de usuario logado (a "Visao Geral" do menu).
+- render_acoes: formularios de cadastro/consulta/importacao (a pagina "Cadastros"/"Acoes" do menu).
+
+A navegacao entre essas paginas e o logout ficam no menu lateral, em main.py.
 """
+import altair as alt
 import streamlit as st
 
 import actions
-import auth
 from db import run_function
 from labels import to_dataframe
 
 
+# ============================================================================================
+# GRAFICOS ESTATICOS
+#
+# Os graficos nativos (st.bar_chart / st.line_chart) permitem zoom e arraste pelo usuario.
+# Para evitar esse comportamento, montamos os graficos com Altair SEM chamar .interactive():
+# por padrao um grafico Altair nao tem pan/zoom. Mantemos so o tooltip ao passar o mouse.
+# ============================================================================================
+def _grafico_barras(df, coluna_categoria, coluna_valor):
+    chart = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X(f"{coluna_categoria}:N", sort="-y", title=coluna_categoria),
+            y=alt.Y(f"{coluna_valor}:Q", title=coluna_valor),
+            tooltip=list(df.columns),
+        )
+        .properties(width="container", height=300)
+    )
+    st.altair_chart(chart)
+
+
+def _grafico_linha(df, coluna_x, coluna_y):
+    chart = (
+        alt.Chart(df)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X(f"{coluna_x}:O", title=coluna_x),
+            y=alt.Y(f"{coluna_y}:Q", title=coluna_y),
+            tooltip=[coluna_x, coluna_y],
+        )
+        .properties(width="container", height=300)
+    )
+    st.altair_chart(chart)
+
+
+# ============================================================================================
+# VISAO GERAL (dashboard)
+# ============================================================================================
 def render_dashboard(user):
-    st.subheader("Dashboard")
+    st.subheader("Visão Geral")
 
     if user["tipo"] == "Admin":
         _render_admin(user)
@@ -23,17 +61,6 @@ def render_dashboard(user):
         _render_escuderia(user)
     else:
         _render_piloto(user)
-
-    st.divider()
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Ver Relatórios", width="stretch"):
-            st.session_state["screen"] = "relatorios"
-            st.rerun()
-    with col2:
-        if st.button("Sair", width="stretch"):
-            auth.logout()
-            st.rerun()
 
 
 def _render_admin(user):
@@ -57,18 +84,13 @@ def _render_admin(user):
         df_esc = to_dataframe(run_function("app_admin_escuderias_temporada_mais_recente"))
         st.dataframe(df_esc, hide_index=True, width="stretch")
         if not df_esc.empty:
-            st.bar_chart(df_esc.set_index("Escuderia")["Total de Pontos"])
+            _grafico_barras(df_esc, "Escuderia", "Total de Pontos")
     with col2:
         st.markdown("##### Pilotos - Pontos na Temporada")
         df_pil = to_dataframe(run_function("app_admin_pilotos_temporada_mais_recente"))
         st.dataframe(df_pil, hide_index=True, width="stretch")
         if not df_pil.empty:
-            st.bar_chart(df_pil.set_index("Piloto")["Total de Pontos"])
-
-    with st.expander("➕ Cadastrar Escuderia"):
-        actions.form_cadastrar_escuderia()
-    with st.expander("➕ Cadastrar Piloto"):
-        actions.form_cadastrar_piloto()
+            _grafico_barras(df_pil, "Piloto", "Total de Pontos")
 
 
 def _render_escuderia(user):
@@ -86,11 +108,6 @@ def _render_escuderia(user):
     c1.metric("Vitórias", vitorias["quantidade_vitorias"])
     c2.metric("Primeiro Ano", anos[0]["primeiro_ano"] if anos else "-")
     c3.metric("Último Ano", anos[0]["ultimo_ano"] if anos else "-")
-
-    with st.expander("🔍 Consultar Piloto por Sobrenome"):
-        actions.form_consultar_piloto_por_sobrenome(escuderia_id)
-    with st.expander("📂 Importar Pilotos por Arquivo"):
-        actions.form_importar_pilotos(escuderia_id)
 
 
 def _render_piloto(user):
@@ -119,4 +136,31 @@ def _render_piloto(user):
 
     if not df.empty:
         st.markdown("##### Pontos por Ano")
-        st.line_chart(df.groupby("Ano")["Pontos"].sum())
+        pontos_ano = df.groupby("Ano", as_index=False)["Pontos"].sum()
+        _grafico_linha(pontos_ano, "Ano", "Pontos")
+
+
+# ============================================================================================
+# ACOES / CADASTROS
+# ============================================================================================
+def render_acoes(user):
+    if user["tipo"] == "Admin":
+        st.subheader("Cadastros")
+        st.markdown("##### ➕ Cadastrar Escuderia")
+        actions.form_cadastrar_escuderia()
+        st.divider()
+        st.markdown("##### ➕ Cadastrar Piloto")
+        actions.form_cadastrar_piloto()
+
+    elif user["tipo"] == "Escuderia":
+        st.subheader("Ações")
+        escuderia_id = user["id_original"]
+        st.markdown("##### 🔍 Consultar Piloto por Sobrenome")
+        actions.form_consultar_piloto_por_sobrenome(escuderia_id)
+        st.divider()
+        st.markdown("##### 📂 Importar Pilotos por Arquivo")
+        actions.form_importar_pilotos(escuderia_id)
+
+    else:
+        # Piloto e somente leitura: nao deveria chegar aqui (sem opcao no menu), mas garantimos.
+        st.info("Usuários do tipo Piloto não possuem ações de cadastro.")

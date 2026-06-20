@@ -36,12 +36,6 @@ def render_reports(user):
     else:
         _render_relatorio(user, selecionado)
 
-    st.divider()
-    if st.button("Voltar ao Dashboard"):
-        st.session_state["relatorio_selecionado"] = None
-        st.session_state["screen"] = "dashboard"
-        st.rerun()
-
 
 def _render_lista(user):
     for codigo in REPORTS_BY_TYPE[user["tipo"]]:
