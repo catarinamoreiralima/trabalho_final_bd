@@ -406,8 +406,9 @@ IS 'Acao Escuderia: lista pilotos vinculados a escuderia, incluindo importados s
 /* ------------------------------------------------------------------------------------------------------------
    ESCUDERIA - CONSULTAR PILOTO POR SOBRENOME
 
-   Busca pilotos com o sobrenome informado que estejam vinculados a escuderia logada.
-   O vinculo pode vir do historico de results ou de importacao por arquivo.
+   Esta funcao consulta results diretamente, garantindo que so apareçam pilotos que de fato tem participacao 
+   em corrida pela escuderia - pilotos apenas importados por arquivo, que ainda nao correram, nao devem aparecer 
+   aqui (esses ficam na listagem cadastral app_escuderia_listar_pilotos).
 ------------------------------------------------------------------------------------------------------------ */
 DROP FUNCTION IF EXISTS app_escuderia_consultar_piloto_por_sobrenome(INTEGER, TEXT);
 
@@ -432,18 +433,18 @@ BEGIN
         (d.given_name || ' ' || d.family_name)::TEXT AS nome_completo,
         d.date_of_birth AS data_nascimento,
         co.name::TEXT AS pais
-    FROM app_escuderia_pilotos ep
+    FROM results res
     JOIN drivers d
-      ON d.id = ep.piloto_id
+      ON d.id = res.driver_id
     JOIN countries co
       ON co.id = d.country_id
-    WHERE ep.escuderia_id = p_escuderia_id
+    WHERE res.constructor_id = p_escuderia_id
       AND lower(d.family_name) = lower(p_sobrenome)
     ORDER BY nome_completo;
 END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION app_escuderia_consultar_piloto_por_sobrenome(INTEGER, TEXT)
-IS 'Acao Escuderia: consulta pilotos por sobrenome no escopo da escuderia logada.';
+IS 'Acao Escuderia: consulta pilotos por sobrenome que ja correram pela escuderia (via RESULTS).';
 
 COMMIT;

@@ -102,7 +102,9 @@ BEGIN
     JOIN vw_aeroportos_cidades_paises vap
       ON vap.latitude_aeroporto IS NOT NULL
      AND vap.longitude_aeroporto IS NOT NULL
-    WHERE lower(c.name) = lower(p_city_name)
+    -- Filtro accent-insensitive: usa unaccent (extensao criada em insert_table.sql) para que
+    -- "sao paulo", "SÃO PAULO" e "São Paulo" casem com o nome acentuado armazenado em cities.
+    WHERE unaccent(lower(c.name)) = unaccent(lower(p_city_name))
       AND country_city.code = 'BR'
       AND vap.codigo_pais_aeroporto = 'BR'
       AND vap.tipo_aeroporto IN ('medium_airport', 'large_airport')
@@ -396,14 +398,15 @@ DROP FUNCTION IF EXISTS app_piloto_relatorio_6(INTEGER);
 CREATE OR REPLACE FUNCTION app_piloto_relatorio_6(piloto_id INTEGER)
 RETURNS TABLE (
     ano_participacao INTEGER,
-    quantidade_total_pontos INTEGER,
+    -- NUMERIC(10,2) e nao INTEGER: a F1 atribui meios-pontos (ex.: corridas encurtadas).
+    quantidade_total_pontos NUMERIC(10,2),
     corridas_pontuadas TEXT
 ) AS $$
 BEGIN
     RETURN QUERY
     SELECT
         vrc.ano::INTEGER AS ano_participacao,
-        SUM(vrc.points)::INTEGER AS quantidade_total_pontos,
+        SUM(vrc.points)::NUMERIC(10,2) AS quantidade_total_pontos,
         STRING_AGG(vrc.corrida, ', ' ORDER BY vrc.rodada)::TEXT AS corridas_pontuadas
     FROM vw_resultados_corridas vrc
     WHERE vrc.driver_id = piloto_id
