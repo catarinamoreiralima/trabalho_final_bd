@@ -101,20 +101,33 @@ def _relatorio_3():
     nivel2 = [r for r in hierarquico if r["nivel"] == 2]
     nivel3 = [r for r in hierarquico if r["nivel"] == 3]
 
+    # Nivel 1 - total geral de corridas
     if nivel1:
         st.metric("Total de Corridas Cadastradas", nivel1[0]["quantidade_corridas"])
 
-    st.markdown("**Nível 2 — Resumo por Circuito**")
-    st.dataframe(to_dataframe(nivel2), hide_index=True, width="stretch")
-
-    # Drill-down: o nivel 3 ja foi carregado junto, so filtramos em memoria pelo circuito
-    # escolhido, sem nova consulta ao banco.
-    circuitos = sorted({r["circuito"] for r in nivel2})
-    if circuitos:
-        circuito_escolhido = st.selectbox("Ver corridas do circuito:", circuitos, key="relatorio_3_circuito")
-        st.markdown(f"**Nível 3 — Corridas em {circuito_escolhido}**")
-        detalhe = [r for r in nivel3 if r["circuito"] == circuito_escolhido]
-        st.dataframe(to_dataframe(detalhe), hide_index=True, width="stretch")
+    # Niveis 2 e 3 em drill-down: cada circuito (nivel 2) vira um expander clicavel; ao abrir,
+    # mostra embaixo as corridas daquele circuito (nivel 3). A coluna "nivel" nao e exibida -
+    # ela so organiza a hierarquia internamente. Os dados do nivel 3 ja vieram na mesma consulta,
+    # entao o filtro por circuito e feito em memoria, sem nova ida ao banco.
+    st.markdown("**Resumo por Circuito** (clique para ver as corridas)")
+    for circ in nivel2:
+        titulo = (
+            f"{circ['circuito']} — {circ['quantidade_corridas']} corrida(s)  ·  "
+            f"voltas: mín {circ['minimo_voltas']} / méd {circ['media_voltas']} / máx {circ['maximo_voltas']}"
+        )
+        with st.expander(titulo):
+            detalhe = [
+                {
+                    "ano": r["ano"],
+                    "rodada": r["rodada"],
+                    "corrida": r["corrida"],
+                    "voltas_registradas": r["voltas_registradas"],
+                    "quantidade_pilotos": r["quantidade_pilotos"],
+                }
+                for r in nivel3
+                if r["circuito"] == circ["circuito"]
+            ]
+            st.dataframe(to_dataframe(detalhe), hide_index=True, width="stretch")
 
 
 def _relatorio_4(escuderia_id):
