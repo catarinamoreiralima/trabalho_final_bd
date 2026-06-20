@@ -6,5 +6,6 @@ __pycache__/
 docker-compose.override.yml
 
 docs/*
+!docs/screenshots/
 !docs/relatorio.tex
 !docs/relatorio.pdf

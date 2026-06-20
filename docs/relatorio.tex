@@ -26,14 +26,14 @@
 
 \title{
     \textbf{Projeto Final}\\
-    Laboratório de Bases de Dados - Sigla\\
+    Laboratório de Bases de Dados - SCC0241\\
     Interface de controle e exploração de base de dados da Fórmula 1
 }
 
 \author{
     Catarina Moreira Lima -- 8957221 \\
-    Nome 2 -- NUSP \\
-    Nome 3 -- NUSP
+    Amanda Kasat Baltor -- 13727210 \\
+    Vitor Hugo Almeida Couto -- 13672787
 }
 
 \date{Junho de 2026}
@@ -158,12 +158,12 @@ Foram criadas funções auxiliares para representar ações solicitadas na espec
     \item \texttt{app\_admin\_cadastrar\_piloto}: cadastra um novo piloto e deixa a criação do usuário correspondente a cargo da trigger;
     \item \texttt{app\_escuderia\_processar\_importacao\_pilotos}: processa linhas carregadas por arquivo em uma tabela de apoio, cadastrando pilotos novos e criando vínculos com a escuderia;
     \item \texttt{app\_escuderia\_listar\_pilotos}: lista os pilotos vinculados à escuderia no cadastro da aplicação;
-    \item \texttt{app\_escuderia\_consultar\_piloto\_por\_sobrenome}: consulta pilotos pelo sobrenome, limitando os resultados aos pilotos vinculados à escuderia logada.
+    \item \texttt{app\_escuderia\_consultar\_piloto\_por\_sobrenome}: consulta pilotos pelo sobrenome que \emph{já correram} pela escuderia logada, consultando diretamente a tabela \texttt{results}, conforme a dica do enunciado.
 \end{itemize}
 
 Para suportar a importação de pilotos por escuderia, foi criada uma tabela própria de vínculo entre escuderias e pilotos. A relação original entre piloto e escuderia aparece apenas em \texttt{results}; portanto, pilotos recém-importados ainda não teriam vínculo visível caso a aplicação dependesse somente dos resultados históricos. Por isso, a tabela é inicialmente populada com pares distintos de \texttt{results}, recebe vínculos criados por importação de arquivo e é atualizada por trigger quando novos resultados são registrados.
 
-Após a revisão das funções, foi mantida a separação entre consultas de desempenho e consultas cadastrais. Dashboards e relatórios que calculam pontos, vitórias, temporadas, corridas ou status usam \texttt{results} ou \texttt{vw\_resultados\_corridas}, pois dependem de participação real em corridas. Já as consultas cadastrais de pilotos vinculados à escuderia usam \texttt{app\_escuderia\_pilotos} ou \texttt{vw\_escuderia\_pilotos}, permitindo incluir pilotos importados por arquivo mesmo antes de existirem resultados para eles.
+Após a revisão das funções, foi mantida a separação entre consultas de desempenho e consultas cadastrais. Dashboards e relatórios que calculam pontos, vitórias, temporadas, corridas ou status usam \texttt{results} ou \texttt{vw\_resultados\_corridas}, pois dependem de participação real em corridas. A consulta de piloto por sobrenome também se baseia em \texttt{results}, pois o enunciado pede pilotos que \emph{já correram} pela escuderia. Já a \emph{listagem} cadastral de pilotos vinculados à escuderia (\texttt{app\_escuderia\_listar\_pilotos}) usa \texttt{app\_escuderia\_pilotos} ou \texttt{vw\_escuderia\_pilotos}, pois nesse caso faz sentido incluir também pilotos importados por arquivo, mesmo antes de existirem resultados para eles.
 
 \section{Dashboards}
 
@@ -205,16 +205,18 @@ Este relatório apresenta a quantidade de resultados agrupados por status de cor
 
 \subsection{Relatório 2 -- Admin: Aeroportos Próximos a Cidade Brasileira}
 
-Este relatório recebe o nome de uma cidade e retorna aeroportos brasileiros dos tipos \texttt{medium\_airport} e \texttt{large\_airport} localizados a até 100 km da cidade pesquisada.
+Este relatório recebe o nome de uma cidade e retorna aeroportos brasileiros dos tipos \texttt{medium\_airport} e \texttt{large\_airport} localizados a até 100 km da cidade pesquisada. Os dados de aeroporto são obtidos pela view \texttt{vw\_aeroportos\_cidades\_paises}.
 
 Para o cálculo de distância foi utilizada a extensão \texttt{earthdistance}, juntamente com \texttt{cube}.
 
 \begin{lstlisting}[style=sqlstyle]
 earth_distance(
     ll_to_earth(c.latitude, c.longitude),
-    ll_to_earth(a.latitude_deg, a.longitude_deg)
+    ll_to_earth(vap.latitude_aeroporto, vap.longitude_aeroporto)
 ) / 1000.0
 \end{lstlisting}
+
+A busca pelo nome da cidade é \emph{insensível a acentos}: utilizamos a extensão \texttt{unaccent} no filtro (\texttt{unaccent(lower(c.name)) = unaccent(lower(p\_city\_name))}), de modo que ``sao paulo'', ``São Paulo'' e ``SÃO PAULO'' retornam o mesmo resultado. Como consequência dessa escolha, o índice \texttt{idx\_cities\_country\_lower\_name\_coordinates} passa a ter papel secundário nesse filtro específico (a expressão indexada não corresponde mais exatamente ao predicado); ele continua útil para restringir cidades por país e por coordenadas disponíveis.
 
 \subsection{Relatório 3 -- Admin: Relatório Hierárquico de Corridas}
 
@@ -245,6 +247,8 @@ Este relatório apresenta a quantidade de resultados por status, limitada ao esc
 \subsection{Relatório 6 -- Piloto: Pontos por Ano e Corridas}
 
 Este relatório apresenta os pontos obtidos pelo piloto por ano de participação, indicando as corridas em que os pontos foram obtidos.
+
+O total de pontos por ano é retornado como \texttt{NUMERIC(10,2)}, e não como inteiro. Isso porque a Fórmula 1 atribui meios-pontos em situações específicas (por exemplo, corridas encurtadas). Essa escolha mantém o relatório consistente com o \textit{dashboard} do piloto, que também trabalha com pontos fracionários.
 
 \subsection{Relatório 7 -- Piloto: Status das Corridas}
 Este relatório apresenta a quantidade de resultados por status nas corridas em que o piloto participou.
@@ -277,53 +281,113 @@ Os índices foram criados para auxiliar consultas com filtros, junções e orden
 
 \section{Interface da Aplicação}
 
-A interface foi organizada em três telas principais:
+A interface foi desenvolvida em Streamlit (Python) e roda localmente, conectando-se ao PostgreSQL em execução no container Docker. Toda consulta feita pela aplicação chama, de forma explícita, uma \textit{view} ou função já criada no banco; não há lógica de negócio duplicada em Python nem uso de \textit{ORM}, o que mantém o SQL visível para avaliação.
 
-\begin{itemize}
-    \item tela de login;
-    \item tela de \textit{dashboard};
-    \item tela de relatórios.
-\end{itemize}
+A aplicação é centrada em três telas principais --- login, \textit{dashboard} e relatórios ---, cada uma com variações de acordo com o tipo de usuário autenticado. Após o login, a navegação entre as telas é feita por um menu na barra lateral, organizado em itens de texto clicáveis e adaptado ao perfil do usuário: o administrador acessa ``Visão Geral'', ``Cadastros'' e ``Relatórios''; a escuderia acessa ``Visão Geral'', ``Ações'' e ``Relatórios''; e o piloto, por ser somente leitura, acessa apenas ``Visão Geral'' e ``Relatórios''. A mesma barra lateral exibe a logo da Fórmula 1, o nome do usuário logado e o botão de \textit{logout}, disponível em qualquer tela.
 
 \subsection{Tela de Login}
 
-Inserir descrição e captura de tela.
+A tela inicial solicita login e senha e autentica o usuário pela função \texttt{app\_login}, que valida a senha protegida com \texttt{pgcrypto} e registra o evento de \texttt{LOGIN} na tabela \texttt{users\_log}. Em caso de credenciais inválidas, uma mensagem de erro é exibida; com a autenticação bem-sucedida, o usuário é direcionado à tela de \textit{dashboard}.
 
 \begin{figure}[H]
     \centering
-    % \includegraphics[width=0.85\textwidth]{screenshots/login.png}
+    \includegraphics[width=0.85\textwidth]{screenshots/login.png}
     \caption{Tela de login da aplicação.}
 \end{figure}
 
 \subsection{Tela de Dashboard}
 
-Inserir descrição e captura de tela.
+A página ``Visão Geral'' apresenta as informações sumarizadas do perfil logado. O administrador vê os totais de pilotos, escuderias e temporadas, as corridas da temporada mais recente e os pontos por escuderia e por piloto, com gráficos de apoio. A escuderia vê o número de pilotos, as vitórias e o primeiro e último ano com dados. O piloto vê a escuderia atual, seu nome completo e o desempenho por ano e circuito. Os gráficos foram construídos com Altair em modo estático (sem \textit{zoom} ou arraste), priorizando a leitura dos dados.
+
+As ações de cada perfil ficam em página própria do menu: ``Cadastros'', para o administrador (cadastrar escuderia e piloto), e ``Ações'', para a escuderia (consultar piloto por sobrenome e importar pilotos por arquivo). O piloto não possui ações de cadastro.
 
 \begin{figure}[H]
     \centering
-    % \includegraphics[width=0.85\textwidth]{screenshots/dashboard.png}
-    \caption{Tela de dashboard.}
+    \includegraphics[width=0.85\textwidth]{screenshots/dashboard.png}
+    \caption{Tela de dashboard (Visão Geral).}
 \end{figure}
 
 \subsection{Tela de Relatórios}
 
-Inserir descrição e captura de tela.
+A página de relatórios lista apenas os relatórios disponíveis ao perfil logado. Ao escolher um relatório, a aplicação executa a função correspondente e exibe o resultado; em seguida, é possível retornar à lista. O Relatório 3, hierárquico, é apresentado como um \textit{drill-down}: cada circuito pode ser expandido para mostrar suas corridas.
 
 \begin{figure}[H]
     \centering
-    % \includegraphics[width=0.85\textwidth]{screenshots/relatorios.png}
+    \includegraphics[width=0.85\textwidth]{screenshots/relatorios.png}
     \caption{Tela de relatórios.}
 \end{figure}
 
 \section{Decisões de Projeto}
 
+Esta seção reúne as principais escolhas do grupo e a justificativa de cada uma.
 
+\subsection{Modelagem e tratamento de dados (Trabalho Prático T1)}
+
+A modelagem do esquema e o tratamento/limpeza dos dados utilizados nesta aplicação são os disponibilizados no \emph{gabarito de referência} do Trabalho Prático T1. Optamos por reaproveitar essa versão de referência por ser a base já validada ao longo da disciplina, sobre a qual a aplicação foi construída.
+
+\subsection{Escolha do Streamlit como tecnologia de interface}
+
+Escolhemos o \textbf{Streamlit} (Python) por permitir construir as telas, formulários e, principalmente, os \textit{dashboards} de forma prática e rápida, com componentes prontos de tabela, métrica e gráfico, sem exigir um \textit{front-end} web separado. Assim, o esforço ficou concentrado no que o trabalho de fato avalia --- consultas, funções, views, índices e \textit{triggers} ---, enquanto a camada de interface apenas chama as views e funções já criadas no banco. Os gráficos dos \textit{dashboards} foram montados com Altair (já incluído no Streamlit), configurados de forma estática (sem zoom ou arraste) para priorizar a leitura clara dos dados.
+
+\subsection{Autenticação pela tabela \texttt{users} com hash, em vez de usuários reais do SGBD}
+
+O enunciado permite duas abordagens: usar usuários reais do PostgreSQL (com autenticação \texttt{SCRAM-SHA-256}) ou autenticar diretamente por uma tabela \texttt{users}, desde que a senha não seja armazenada em texto puro. Optamos pela segunda. Assim, não é necessário criar e gerenciar centenas de \textit{roles} reais no SGBD (uma por piloto e por escuderia), o protótipo fica mais portável entre máquinas e a lógica de login/logout pode ser controlada pela própria aplicação. As senhas são armazenadas como \textit{hash} gerado com \texttt{pgcrypto} (\texttt{crypt()} com \texttt{gen\_salt('bf')}, isto é, \textit{bcrypt}), nunca em texto puro.
+
+\subsection{Lógica de negócio no banco e SQL explícito na aplicação}
+
+Todas as operações da aplicação (consultas, cadastros, importação, login) são implementadas como \emph{views} e \emph{funções} no banco. A camada em Python apenas chama essas views/funções com SQL explícito, sem utilizar um ORM. Essa decisão concentra a regra de negócio em um único lugar (o banco), evitando duplicação de lógica entre SQL e Python.
+
+\subsection{Tabela própria de vínculo entre escuderia e piloto}
+
+Na base original, a associação entre piloto e escuderia só existe na tabela \texttt{results}, ou seja, apenas após participação real em corrida. Como a importação de pilotos por arquivo pode cadastrar pilotos que ainda não correram, criamos a tabela \texttt{app\_escuderia\_pilotos} para registrar esses vínculos. Ela é populada inicialmente com os pares distintos de \texttt{results}, recebe os vínculos criados na importação e é mantida atualizada por \textit{trigger} quando novos resultados surgem. A tabela aceita um mesmo piloto vinculado a mais de uma escuderia, preservando mudanças de equipe ao longo da carreira.
+
+\subsection{Separação entre consultas de desempenho e consultas cadastrais}
+
+Como consequência da decisão anterior, separamos dois tipos de consulta. As consultas de \emph{desempenho} (pontos, vitórias, temporadas, status) usam \texttt{results} ou \texttt{vw\_resultados\_corridas}, pois dependem de participação real em corrida. A \emph{consulta de piloto por sobrenome} também usa \texttt{results}, porque o enunciado pede pilotos que \emph{já correram} pela escuderia (e dá a dica de consultar \texttt{results}). Já a \emph{listagem} cadastral de pilotos vinculados usa \texttt{app\_escuderia\_pilotos}, pois aí faz sentido incluir também os pilotos recém contratados que ainda não têm resultados.
+
+\subsection{Sincronização e consistência de usuários por \textit{triggers}}
+
+Optamos por delegar a criação e a remoção dos usuários de piloto e escuderia a \textit{triggers} nas tabelas \texttt{drivers} e \texttt{constructors}, em vez de fazer isso no código da aplicação. Assim, qualquer inserção nessas tabelas --- venha da interface ou de um comando SQL direto --- gera o usuário correspondente automaticamente. Quando o \textit{login} gerado já existe para outro usuário, a \textit{trigger} cancela a operação com \texttt{RAISE EXCEPTION}, impedindo inserção inconsistente. Na prática, como \texttt{constructor\_ref} e \texttt{driver\_ref} são únicos, a restrição \texttt{UNIQUE} da tabela de origem costuma barrar o caso comum de referência repetida antes mesmo da \textit{trigger}; a verificação na \textit{trigger} garante o cancelamento também no cenário em que o \textit{login} já existe por outro caminho.
+
+\subsection{Busca de cidade insensível a acentos (Relatório 2)}
+
+Para melhorar a usabilidade, a busca de cidade do Relatório 2 ignora acentuação e caixa, usando a extensão \texttt{unaccent}. Dessa forma, ``sao paulo'' e ``São Paulo'' retornam o mesmo resultado. Como consequência, o índice de cidade deixa de casar exatamente com o predicado, passando a ter papel secundário nesse filtro.
+
+\subsection{Pontuação com casas decimais (Relatório 6)}
+
+O total de pontos por ano é tratado como \texttt{NUMERIC(10,2)}, e não como inteiro, porque a Fórmula 1 atribui meios-pontos em situações específicas. Truncar para inteiro perderia esses 0,5 ponto e tornaria o relatório inconsistente com o \textit{dashboard} do piloto.
+
+\subsection{Controle de acesso por perfil}
+
+Cada tipo de usuário enxerga apenas o que lhe cabe. As funções de escuderia e de piloto recebem o \texttt{id\_original} do usuário logado e filtram os dados por esse identificador. Na interface, o menu lateral exibe apenas as páginas e ações do perfil autenticado, e o usuário do tipo \texttt{Piloto} é somente leitura, sem qualquer ação de cadastro, conforme o enunciado.
+
+\subsection{Importação de pilotos por \textit{upload} de arquivo}
+
+Optamos por implementar a importação como \textit{upload} pelo navegador (\textit{widget} de envio de arquivo do Streamlit), o que é mais prático de demonstrar e não depende de o arquivo estar em um caminho específico do servidor. O arquivo é carregado em uma tabela de \textit{staging} e processado pela função \texttt{app\_escuderia\_processar\_importacao\_pilotos}, que rejeita linhas cujo nome e sobrenome já existam em outro piloto.
+
+\subsection{Organização da carga em dois \textit{scripts}}
+
+A carga foi separada em \texttt{load\_database.sh} (esquema, dados e limpeza) e \texttt{load\_app.sh} (usuários, ações, índices, views, dashboards e relatórios). Isso permite recarregar apenas a camada da aplicação durante o desenvolvimento, sem reprocessar toda a base a cada alteração em uma função, view ou índice.
 
 \section{Dificuldades Encontradas}
 
+De modo geral, o projeto não apresentou grandes dificuldades. As atividades realizadas ao longo do semestre foram muito úteis e puderam ser aproveitadas diretamente no trabalho final: várias das consultas, assim como agregações, filtros, criação de funções, \textit{views} e \textit{triggers}, além do cálculo de distância geográfica já haviam sido exercitadas em atividades anteriores. Isso reduziu bastante o esforço com as buscas do projeto, pois boa parte do raciocínio (e até de trechos de consulta) pôde ser reaproveitada.
 
+Ainda assim, alguns pontos exigiram mais atenção, como costuma ocorrer em projetos desse tipo:
 
+\begin{itemize}
+    \item integração de bases heterogêneas (Fórmula 1, países, cidades e aeroportos), que exige cuidado com chaves, vínculos e padronização de nomes;
+    \item garantir que cada perfil de usuário acesse apenas as informações que lhe são permitidas;
+    \item ajustes de ambiente e configuração (Docker e conexão com o banco) para que o projeto rodasse de forma reprodutível entre os integrantes do grupo.
+\end{itemize}
+
+Esses pontos foram tratados de forma incremental e, por já terem sido abordados de alguma maneira durante a disciplina, foram mais traquilos de resolver nesse momento. 
 \section{Conclusão}
 
+O trabalho atingiu o objetivo proposto: desenvolver um protótipo de aplicação completa para exploração da base de dados da Fórmula 1, integrada a dados geográficos de países, cidades e aeroportos. A ferramenta autentica três perfis de usuário (administrador, escuderia e piloto), apresenta \textit{dashboards} personalizados, executa os relatórios solicitados e oferece as ações de cadastro, consulta e importação previstas no enunciado, sempre respeitando as permissões de cada perfil.
+
+Do ponto de vista de banco de dados, o projeto reuniu os principais conceitos estudados na disciplina: criação e normalização do esquema, limpeza e deduplicação dos dados, consultas com junções, agregações e filtros, \textit{views} reutilizáveis, funções e procedimentos armazenados, \textit{triggers} para manter a consistência entre as tabelas, índices para apoiar as consultas mais frequentes e um modelo de autenticação com senhas protegidas. A opção por concentrar a lógica no banco e manter o SQL explícito na aplicação reforçou esses conceitos.
+
+A integração entre os recursos do PostgreSQL e a interface em Streamlit mostrou-se eficaz para transformar consultas em informações organizadas e de fácil leitura para o usuário final. Como evolução futura, o projeto poderia incluir novos relatórios e filtros, gráficos comparativos entre temporadas, atualização da base com as corridas mais recentes e refinamentos adicionais na deduplicação de cidades feitas manualmente.
 
 \end{document}
